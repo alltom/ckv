@@ -15,8 +15,9 @@ typedef struct {
 } ThreadQueue;
 
 /*
-create a private global namespace for this thread,
-leaving a reference ("global") to the global global namespace
+Create a private global namespace for this thread,
+leaving a reference ("global") to the global global namespace.
+This is only done for files. Their children inherit the parent's namepsace.
 */
 static
 void
@@ -75,10 +76,10 @@ main(int argc, char *argv[])
 		
 		switch(luaL_loadfile(thread.L, thread.filename)) {
 		case LUA_ERRSYNTAX:
-			fprintf(stderr, "syntax error\n");
+			fprintf(stderr, "syntax error in '%s'\n", thread.filename);
 			return EXIT_FAILURE;
 		case LUA_ERRMEM:
-			fprintf(stderr, "memory allocation error while loading\n");
+			fprintf(stderr, "memory allocation error while loading '%s'\n", thread.filename);
 			return EXIT_FAILURE;
 		case LUA_ERRFILE:
 			fprintf(stderr, "cannot open script '%s'\n", thread.filename);
