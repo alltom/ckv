@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+/* STANDARD FUNCTIONS */
+
 /* copied from lua's base library */
 static int ckv_tostring(lua_State *L) {
 	luaL_checkany(L, 1);
@@ -56,6 +58,8 @@ static int ckv_fork(lua_State *L) {
 	lua_pop(L, n);
 	return 0; /* number of results */
 }
+
+/* LIBRARY REGISTRATION */
 
 static const luaL_Reg ckvlib[] = {
 	{ "tostring", ckv_tostring },
