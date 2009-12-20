@@ -52,6 +52,50 @@ static int ckv_print(lua_State *L) {
 	return 0;
 }
 
+static int ckv_type(lua_State *L) {
+	luaL_checkany(L, 1);
+	lua_pushstring(L, luaL_typename(L, 1));
+	return 1;
+}
+
+
+static int ckv_next(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	lua_settop(L, 2);  /* create a 2nd argument if there isn't one */
+	if (lua_next(L, 1))
+		return 2;
+	else {
+		lua_pushnil(L);
+		return 1;
+	}
+}
+
+static int ckv_pairs (lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_pushvalue(L, lua_upvalueindex(1));  /* return generator, */
+  lua_pushvalue(L, 1);  /* state, */
+  lua_pushnil(L);  /* and initial value */
+  return 3;
+}
+
+static int ipairsaux (lua_State *L) {
+  int i = luaL_checkint(L, 2);
+  luaL_checktype(L, 1, LUA_TTABLE);
+  i++;  /* next value */
+  lua_pushinteger(L, i);
+  lua_rawgeti(L, 1, i);
+  return (lua_isnil(L, -1)) ? 0 : 2;
+}
+
+
+static int ckv_ipairs (lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_pushvalue(L, lua_upvalueindex(1));  /* return generator, */
+  lua_pushvalue(L, 1);  /* state, */
+  lua_pushinteger(L, 0);  /* and initial value */
+  return 3;
+}
+
 static int ckv_fork(lua_State *L) {
 	int n = lua_gettop(L);  /* number of arguments */
 	fprintf(stderr, "spork got %d arguments\n", n);
@@ -68,14 +112,28 @@ static int ckv_yield(lua_State *L) {
 static const luaL_Reg ckvlib[] = {
 	{ "tostring", ckv_tostring },
 	{ "print", ckv_print },
+	{ "type", ckv_type },
+	{ "next", ckv_next },
 	{ "fork", ckv_fork },
 	{ "yield", ckv_yield },
 	{ NULL, NULL }
 };
 
+static void auxopen (lua_State *L, const char *name,
+                     lua_CFunction f, lua_CFunction u) {
+	lua_pushcfunction(L, u);
+	lua_pushcclosure(L, f, 1);
+	lua_setfield(L, -2, name);
+}
+
 /* opens ckv library */
 int open_ckv(lua_State *L) {
 	lua_pushvalue(L, LUA_GLOBALSINDEX);
 	luaL_register(L, NULL, ckvlib);
+	
+	/* `ipairs' and `pairs' need auxliliary functions as upvalues */
+	auxopen(L, "ipairs", ckv_ipairs, ipairsaux);
+	auxopen(L, "pairs", ckv_pairs, ckv_next);
+	
 	return 1;
 }

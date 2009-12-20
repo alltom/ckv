@@ -133,9 +133,16 @@ main(int argc, char *argv[])
 			return EXIT_FAILURE;
 		}
 		
+		lua_getglobal(L, "threads"); /* push threads table */
+		lua_pushlightuserdata(L, thread); /* push pointer to Thread */
+		lua_State *s = lua_newthread(L); /* push thread reference to L's stack */
+		lua_settable(L, -3); /* threads[thread] = s (pops s and thread) */
+		lua_pop(L, 1); /* pop "threads" */
+		
 		thread->filename = argv[1 + i];
+		thread->L = s;
 		thread->now = 0;
-		thread->L = lua_newthread(L);
+		
 		prepenv(thread->L);
 		
 		switch(luaL_loadfile(thread->L, thread->filename)) {
@@ -159,6 +166,12 @@ main(int argc, char *argv[])
 		
 		switch(lua_resume(thread->L, 0)) {
 		case 0:
+			lua_getglobal(L, "threads"); /* push threads table */
+			lua_pushlightuserdata(L, thread); /* push pointer to Thread */
+			lua_pushnil(L); /* pushes nil */
+			lua_settable(L, -3); /* threads[s] = nil (pops s and thread) */
+			lua_pop(L, 1); /* pop "threads" */
+			
 			remove_thread(&queue, thread);
 			break;
 		case LUA_YIELD: {

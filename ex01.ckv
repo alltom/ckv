@@ -27,4 +27,9 @@ print("global BAR is:", global.BAR);
 global.BAR = "frank sinatra";
 
 yield(100);
+
+for k,v in pairs(global.threads) do
+	print("yay", k, v);
+end
+
 print("done!");
