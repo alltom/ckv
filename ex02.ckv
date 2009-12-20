@@ -1,0 +1,14 @@
+outside = "brave new world";
+
+function tofork()
+	print("in the fork,", outside);
+end
+
+function tofork2(a, b, c)
+	print("forked with", a, b, c, outside);
+end
+
+print("about to fork");
+fork(tofork);
+fork(tofork2, 3, 6, 9);
+print("forked");
