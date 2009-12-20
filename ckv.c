@@ -7,32 +7,21 @@
 int
 main(int argc, char *argv[])
 {
-	lua_State *l;
-	l = luaL_newstate();
-	if(l == NULL) {
+	lua_State *L;
+	L = luaL_newstate();
+	if(L == NULL) {
 		fprintf(stderr, "cannot init lua\n");
 		return EXIT_FAILURE;
 	}
 	
-	/* luaL_openlibs(l); */
-	/*
-	luaopen_base (for the basic library),
-	luaopen_package (for the package library),
-	luaopen_string (for the string library),
-	luaopen_table (for the table library),
-	luaopen_math (for the mathematical library),
-	luaopen_io (for the I/O library),
-	luaopen_os (for the Operating System library),
-	luaopen_debug
-	*/
-	lua_pushcfunction(l, luaopen_string); lua_call(l, 0, 0);
-	lua_pushcfunction(l, luaopen_table); lua_call(l, 0, 0);
-	lua_pushcfunction(l, luaopen_math); lua_call(l, 0, 0);
+	lua_gc(L, LUA_GCSTOP, 0);  /* stop collector during initialization */
+	lua_pushcfunction(L, luaopen_string); lua_call(L, 0, 0);
+	lua_pushcfunction(L, luaopen_table); lua_call(L, 0, 0);
+	lua_pushcfunction(L, luaopen_math); lua_call(L, 0, 0);
+	lua_pushcfunction(L, open_ckv); lua_call(L, 0, 0);
+	lua_gc(L, LUA_GCRESTART, 0);
 	
-	/* load ckv lib */
-	lua_pushcfunction(l, open_ckv); lua_call(l, 0, 0);
-	
-	switch(luaL_loadfile(l, argv[1])) {
+	switch(luaL_loadfile(L, argv[1])) {
 	case LUA_ERRSYNTAX:
 		fprintf(stderr, "syntax error\n");
 		return EXIT_FAILURE;
@@ -44,7 +33,7 @@ main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 	
-	switch(lua_pcall(l, 0, LUA_MULTRET, 0)) {
+	switch(lua_pcall(L, 0, LUA_MULTRET, 0)) {
 	case LUA_ERRRUN:
 		fprintf(stderr, "runtime error\n");
 		return EXIT_FAILURE;
@@ -53,7 +42,7 @@ main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 	
-	lua_close(l);
+	lua_close(L);
 	
 	return EXIT_SUCCESS;
 }
