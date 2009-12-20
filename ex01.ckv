@@ -1,0 +1,2 @@
+print("this is lua");
+print(1 + 1);
