@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+/* copied from lua's base library */
 static int ckv_tostring(lua_State *L) {
 	luaL_checkany(L, 1);
 	if (luaL_callmeta(L, 1, "__tostring"))  /* is there a metafield? */
@@ -27,6 +28,7 @@ static int ckv_tostring(lua_State *L) {
 	return 1;
 }
 
+/* copied from lua's base library */
 static int ckv_print(lua_State *L) {
 	int n = lua_gettop(L);  /* number of arguments */
 	int i;
@@ -41,16 +43,24 @@ static int ckv_print(lua_State *L) {
 			return luaL_error(L, LUA_QL("tostring") " must return a string to "
 			                     LUA_QL("print"));
 		if (i>1) fputs("\t", stdout);
-		fputs(s, stdout);
+		fputs(s, stdout); /* TODO: make non-blocking if necessary */
 		lua_pop(L, 1);  /* pop result */
 	}
 	fputs("\n", stdout);
 	return 0;
 }
 
+static int ckv_fork(lua_State *L) {
+	int n = lua_gettop(L);  /* number of arguments */
+	fprintf(stderr, "spork got %d arguments\n", n);
+	lua_pop(L, n);
+	return 0; /* number of results */
+}
+
 static const luaL_Reg ckvlib[] = {
 	{ "tostring", ckv_tostring },
 	{ "print", ckv_print },
+	{ "fork", ckv_fork },
 	{ NULL, NULL }
 };
 
@@ -58,5 +68,5 @@ static const luaL_Reg ckvlib[] = {
 int open_ckv(lua_State *L) {
 	lua_pushvalue(L, LUA_GLOBALSINDEX);
 	luaL_register(L, NULL, ckvlib);
-	return 2;
+	return 1;
 }

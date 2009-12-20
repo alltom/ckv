@@ -1,2 +1,9 @@
+function crazytown(n)
+	print("entering crazytown");
+	print(n);
+	print("exiting crazytown");
+end
+
 print("this is lua");
 print(1 + 1);
+fork(crazytown, 10);
