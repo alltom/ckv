@@ -1,3 +1,18 @@
+-- an example of how to define a class
+Foo = {
+	new = function(self)
+		return {
+			value = "foo.",
+			print = function(self)
+				print("you printed a Foo:", self.value);
+			end,
+		}
+	end
+};
+
+foo = Foo:new();
+foo:print();
+
 function crazytown(n)
 	print("entering crazytown");
 	print(n);
