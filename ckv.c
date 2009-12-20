@@ -7,6 +7,7 @@
 typedef struct {
 	const char *filename;
 	lua_State *L;
+	double now;
 } Thread;
 
 typedef struct {
@@ -37,10 +38,67 @@ prepenv(lua_State *L)
 	lua_gc(L, LUA_GCRESTART, 0);
 }
 
+/* returns 0 on failure */
+static
+int
+add_thread(ThreadQueue *queue, Thread thread)
+{
+	if(queue->count == queue->capacity) {
+		fprintf(stderr, "resizing thread queue\n");
+		Thread *new_thread_array = realloc(queue->threads, queue->capacity * 2 * sizeof(Thread));
+		if(new_thread_array == NULL) {
+			fprintf(stderr, "could not resize thread queue\n");
+			return 0;
+		}
+		
+		queue->threads = new_thread_array;
+	}
+	
+	queue->threads[queue->count++] = thread;
+	return 1;
+}
+
+static
+Thread *
+next_thread(ThreadQueue *queue)
+{
+	double min_now;
+	int i, min_thread;
+	
+	if(queue->count == 0)
+		return NULL;
+	
+	min_now = queue->threads[0].now;
+	min_thread = 0;
+	for(i = 1; i < queue->count; i++) {
+		if(queue->threads[i].now < min_now) {
+			min_now = queue->threads[i].now;
+			min_thread = i;
+		}
+	}
+	
+	return &queue->threads[min_thread];
+}
+
+static
+void
+remove_thread(ThreadQueue *queue, Thread *thread)
+{
+	int i;
+	for(i = 0; i < queue->count; i++) {
+		if(&queue->threads[i] == thread) {
+			for(; i < queue->count - 1; i++)
+				queue->threads[i] = queue->threads[i+1];
+			queue->count--;
+			return;
+		}
+	}
+}
+
 int
 main(int argc, char *argv[])
 {
-	ThreadQueue threads;
+	ThreadQueue queue;
 	int num_scripts = argc - 1;
 	int i;
 	
@@ -51,10 +109,10 @@ main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 	
-	threads.count = 0;
-	threads.capacity = 10;
-	threads.threads = malloc(sizeof(Thread) * threads.capacity);
-	if(threads.threads == NULL) {
+	queue.count = 0;
+	queue.capacity = 10;
+	queue.threads = malloc(sizeof(Thread) * queue.capacity);
+	if(!queue.threads) {
 		fprintf(stderr, "could not allocate thread queue\n");
 		return EXIT_FAILURE;
 	}
@@ -71,48 +129,47 @@ main(int argc, char *argv[])
 	for(i = 0; i < num_scripts; i++) {
 		Thread thread;
 		thread.filename = argv[1 + i];
+		thread.now = 0;
 		thread.L = lua_newthread(L);
 		prepenv(thread.L);
 		
 		switch(luaL_loadfile(thread.L, thread.filename)) {
 		case LUA_ERRSYNTAX:
 			fprintf(stderr, "syntax error in '%s'\n", thread.filename);
-			return EXIT_FAILURE;
+			break;
 		case LUA_ERRMEM:
 			fprintf(stderr, "memory allocation error while loading '%s'\n", thread.filename);
-			return EXIT_FAILURE;
+			break;
 		case LUA_ERRFILE:
 			fprintf(stderr, "cannot open script '%s'\n", thread.filename);
-			return EXIT_FAILURE;
+			break;
+		default:
+			if(!add_thread(&queue, thread))
+				fprintf(stderr, "could not add '%s' to thread queue\n", thread.filename);
 		}
-		
-		threads.threads[i] = thread;
 	}
 	
-	for(i = 0; i < num_scripts; i++) {
-		Thread thread = threads.threads[i];
-		int running = 1;
+	while(queue.count > 0) {
+		Thread *thread = next_thread(&queue);
 		
-		while(running) {
-			switch(lua_resume(thread.L, 0)) {
-			case 0:
-				fprintf(stderr, "'%s' finished\n\n", thread.filename);
-				running = 0;
-				break;
-			case LUA_YIELD: {
-				lua_Number amount = luaL_checknumber(thread.L, -1);
-				fprintf(stderr, "'%s' yielded %f\n", thread.filename, amount);
-				break;
-			}
-			case LUA_ERRRUN:
-				fprintf(stderr, "runtime error in '%s'\n", thread.filename);
-				running = 0;
-				break;
-			case LUA_ERRMEM:
-				fprintf(stderr, "memory allocation error while running '%s'\n", thread.filename);
-				running = 0;
-				break;
-			}
+		switch(lua_resume(thread->L, 0)) {
+		case 0:
+			remove_thread(&queue, thread);
+			break;
+		case LUA_YIELD: {
+			lua_Number amount = luaL_checknumber(thread->L, -1);
+			if(amount > 0)
+				thread->now += amount;
+			break;
+		}
+		case LUA_ERRRUN:
+			fprintf(stderr, "runtime error in '%s'\n", thread->filename);
+			remove_thread(&queue, thread);
+			break;
+		case LUA_ERRMEM:
+			fprintf(stderr, "memory allocation error while running '%s'\n", thread->filename);
+			remove_thread(&queue, thread);
+			break;
 		}
 	}
 	
