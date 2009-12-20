@@ -59,12 +59,17 @@ static int ckv_fork(lua_State *L) {
 	return 0; /* number of results */
 }
 
+static int ckv_yield(lua_State *L) {
+	return lua_yield(L, lua_gettop(L));
+}
+
 /* LIBRARY REGISTRATION */
 
 static const luaL_Reg ckvlib[] = {
 	{ "tostring", ckv_tostring },
 	{ "print", ckv_print },
 	{ "fork", ckv_fork },
+	{ "yield", ckv_yield },
 	{ NULL, NULL }
 };
 

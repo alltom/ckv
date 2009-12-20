@@ -91,14 +91,28 @@ main(int argc, char *argv[])
 	
 	for(i = 0; i < num_scripts; i++) {
 		Thread thread = threads.threads[i];
+		int running = 1;
 		
-		switch(lua_pcall(thread.L, 0, LUA_MULTRET, 0)) {
-		case LUA_ERRRUN:
-			fprintf(stderr, "runtime error in '%s'\n", thread.filename);
-			return EXIT_FAILURE;
-		case LUA_ERRMEM:
-			fprintf(stderr, "memory allocation error while running '%s'\n", thread.filename);
-			return EXIT_FAILURE;
+		while(running) {
+			switch(lua_resume(thread.L, 0)) {
+			case 0:
+				fprintf(stderr, "'%s' finished\n\n", thread.filename);
+				running = 0;
+				break;
+			case LUA_YIELD: {
+				lua_Number amount = luaL_checknumber(thread.L, -1);
+				fprintf(stderr, "'%s' yielded %f\n", thread.filename, amount);
+				break;
+			}
+			case LUA_ERRRUN:
+				fprintf(stderr, "runtime error in '%s'\n", thread.filename);
+				running = 0;
+				break;
+			case LUA_ERRMEM:
+				fprintf(stderr, "memory allocation error while running '%s'\n", thread.filename);
+				running = 0;
+				break;
+			}
 		}
 	}
 	

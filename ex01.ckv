@@ -25,3 +25,6 @@ fork(crazytown, 10);
 
 print("global BAR is:", global.BAR);
 global.BAR = "frank sinatra";
+
+yield(100);
+print("done!");
