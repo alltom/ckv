@@ -214,7 +214,6 @@ now(void)
 void
 fork_child(lua_State *L)
 {
-	int i;
 	lua_State *nL;
 	Thread *thread = malloc(sizeof(Thread));
 	if(!thread) {
@@ -233,6 +232,37 @@ fork_child(lua_State *L)
 	thread->now = now();
 	
 	lua_xmove(L, nL, lua_gettop(L)); /* move function and args over */
+	
+	if(!add_thread(current_queue, thread))
+		fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);
+}
+
+void
+fork_child_with_eval(lua_State *L)
+{
+	lua_State *nL;
+	const char *code = luaL_checkstring(L, -1);
+	Thread *thread = malloc(sizeof(Thread));
+	if(!thread) {
+		fprintf(stderr, "could not allocate thread for child thread of '%s'\n", current_thread == NULL ? "(null)" : current_thread->filename);
+		return;
+	}
+	
+	lua_getglobal(L, "threads"); /* push threads table */
+	lua_pushlightuserdata(L, thread); /* push pointer to Thread */
+	nL = lua_newthread(L); /* push thread reference to L's stack */
+	lua_settable(L, -3); /* threads[thread] = s (pops s and thread) */
+	lua_pop(L, 1); /* pop "threads" */
+	
+	thread->filename = "";
+	thread->L = nL;
+	thread->now = now();
+	
+	if(luaL_loadstring(nL, code)) {
+		fprintf(stderr, "could not create thread: %s\n", luaL_checkstring(L, -1));
+		free(thread);
+		return;
+	}
 	
 	if(!add_thread(current_queue, thread))
 		fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);

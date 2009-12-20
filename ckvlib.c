@@ -106,6 +106,11 @@ static int ckv_fork(lua_State *L) {
 	return 0;
 }
 
+static int ckv_fork_eval(lua_State *L) {
+	fork_child_with_eval(L);
+	return 0;
+}
+
 static int ckv_yield(lua_State *L) {
 	return lua_yield(L, lua_gettop(L));
 }
@@ -119,6 +124,7 @@ static const luaL_Reg ckvlib[] = {
 	{ "next", ckv_next },
 	{ "now", ckv_now },
 	{ "fork", ckv_fork },
+	{ "fork_eval", ckv_fork_eval },
 	{ "yield", ckv_yield },
 	{ NULL, NULL }
 };
