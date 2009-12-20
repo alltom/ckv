@@ -12,7 +12,7 @@ typedef struct {
 
 typedef struct {
 	int count, capacity;
-	Thread *threads;
+	Thread **threads;
 } ThreadQueue;
 
 /*
@@ -41,11 +41,11 @@ prepenv(lua_State *L)
 /* returns 0 on failure */
 static
 int
-add_thread(ThreadQueue *queue, Thread thread)
+add_thread(ThreadQueue *queue, Thread *thread)
 {
 	if(queue->count == queue->capacity) {
 		fprintf(stderr, "resizing thread queue\n");
-		Thread *new_thread_array = realloc(queue->threads, queue->capacity * 2 * sizeof(Thread));
+		Thread **new_thread_array = realloc(queue->threads, queue->capacity * 2 * sizeof(Thread));
 		if(new_thread_array == NULL) {
 			fprintf(stderr, "could not resize thread queue\n");
 			return 0;
@@ -68,16 +68,16 @@ next_thread(ThreadQueue *queue)
 	if(queue->count == 0)
 		return NULL;
 	
-	min_now = queue->threads[0].now;
+	min_now = queue->threads[0]->now;
 	min_thread = 0;
 	for(i = 1; i < queue->count; i++) {
-		if(queue->threads[i].now < min_now) {
-			min_now = queue->threads[i].now;
+		if(queue->threads[i]->now < min_now) {
+			min_now = queue->threads[i]->now;
 			min_thread = i;
 		}
 	}
 	
-	return &queue->threads[min_thread];
+	return queue->threads[min_thread];
 }
 
 static
@@ -86,7 +86,7 @@ remove_thread(ThreadQueue *queue, Thread *thread)
 {
 	int i;
 	for(i = 0; i < queue->count; i++) {
-		if(&queue->threads[i] == thread) {
+		if(queue->threads[i] == thread) {
 			for(; i < queue->count - 1; i++)
 				queue->threads[i] = queue->threads[i+1];
 			queue->count--;
@@ -127,25 +127,30 @@ main(int argc, char *argv[])
 	lua_setglobal(L, "threads"); /* call the empty table "threads" (pops table) */
 	
 	for(i = 0; i < num_scripts; i++) {
-		Thread thread;
-		thread.filename = argv[1 + i];
-		thread.now = 0;
-		thread.L = lua_newthread(L);
-		prepenv(thread.L);
+		Thread *thread = malloc(sizeof(Thread));
+		if(!thread) {
+			fprintf(stderr, "could not allocate thread for '%s'\n", argv[1 + i]);
+			return EXIT_FAILURE;
+		}
 		
-		switch(luaL_loadfile(thread.L, thread.filename)) {
+		thread->filename = argv[1 + i];
+		thread->now = 0;
+		thread->L = lua_newthread(L);
+		prepenv(thread->L);
+		
+		switch(luaL_loadfile(thread->L, thread->filename)) {
 		case LUA_ERRSYNTAX:
-			fprintf(stderr, "syntax error in '%s'\n", thread.filename);
+			fprintf(stderr, "syntax error in '%s'\n", thread->filename);
 			break;
 		case LUA_ERRMEM:
-			fprintf(stderr, "memory allocation error while loading '%s'\n", thread.filename);
+			fprintf(stderr, "memory allocation error while loading '%s'\n", thread->filename);
 			break;
 		case LUA_ERRFILE:
-			fprintf(stderr, "cannot open script '%s'\n", thread.filename);
+			fprintf(stderr, "cannot open script '%s'\n", thread->filename);
 			break;
 		default:
 			if(!add_thread(&queue, thread))
-				fprintf(stderr, "could not add '%s' to thread queue\n", thread.filename);
+				fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);
 		}
 	}
 	
