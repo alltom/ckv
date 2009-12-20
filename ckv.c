@@ -15,6 +15,9 @@ typedef struct {
 	Thread **threads;
 } ThreadQueue;
 
+static ThreadQueue *current_queue = NULL;
+static Thread *current_thread = NULL;
+
 /*
 Create a private global namespace for this thread,
 leaving a reference ("global") to the global global namespace.
@@ -102,6 +105,8 @@ main(int argc, char *argv[])
 	int num_scripts = argc - 1;
 	int i;
 	
+	current_queue = &queue;
+	
 	lua_State *L;
 	L = luaL_newstate();
 	if(L == NULL) {
@@ -162,31 +167,31 @@ main(int argc, char *argv[])
 	}
 	
 	while(queue.count > 0) {
-		Thread *thread = next_thread(&queue);
+		current_thread = next_thread(&queue);
 		
-		switch(lua_resume(thread->L, 0)) {
+		switch(lua_resume(current_thread->L, lua_gettop(current_thread->L) - 1)) {
 		case 0:
 			lua_getglobal(L, "threads"); /* push threads table */
-			lua_pushlightuserdata(L, thread); /* push pointer to Thread */
+			lua_pushlightuserdata(L, current_thread); /* push pointer to Thread */
 			lua_pushnil(L); /* pushes nil */
 			lua_settable(L, -3); /* threads[s] = nil (pops s and thread) */
 			lua_pop(L, 1); /* pop "threads" */
 			
-			remove_thread(&queue, thread);
+			remove_thread(&queue, current_thread);
 			break;
 		case LUA_YIELD: {
-			lua_Number amount = luaL_checknumber(thread->L, -1);
+			lua_Number amount = luaL_checknumber(current_thread->L, -1);
 			if(amount > 0)
-				thread->now += amount;
+				current_thread->now += amount;
 			break;
 		}
 		case LUA_ERRRUN:
-			fprintf(stderr, "runtime error in '%s'\n", thread->filename);
-			remove_thread(&queue, thread);
+			fprintf(stderr, "runtime error in '%s': %s\n", current_thread->filename, lua_tostring(current_thread->L, -1));
+			remove_thread(&queue, current_thread);
 			break;
 		case LUA_ERRMEM:
-			fprintf(stderr, "memory allocation error while running '%s'\n", thread->filename);
-			remove_thread(&queue, thread);
+			fprintf(stderr, "memory allocation error while running '%s'\n", current_thread->filename);
+			remove_thread(&queue, current_thread);
 			break;
 		}
 	}
@@ -194,4 +199,41 @@ main(int argc, char *argv[])
 	lua_close(L);
 	
 	return EXIT_SUCCESS;
+}
+
+/* non-static functions mostly for calling from ckvlib */
+
+double
+now(void)
+{
+	if(current_thread)
+		return current_thread->now;
+	return 0;
+}
+
+void
+fork_child(lua_State *L)
+{
+	int i;
+	lua_State *nL;
+	Thread *thread = malloc(sizeof(Thread));
+	if(!thread) {
+		fprintf(stderr, "could not allocate thread for child thread of '%s'\n", current_thread == NULL ? "(null)" : current_thread->filename);
+		return;
+	}
+	
+	lua_getglobal(L, "threads"); /* push threads table */
+	lua_pushlightuserdata(L, thread); /* push pointer to Thread */
+	nL = lua_newthread(L); /* push thread reference to L's stack */
+	lua_settable(L, -3); /* threads[thread] = s (pops s and thread) */
+	lua_pop(L, 1); /* pop "threads" */
+	
+	thread->filename = "";
+	thread->L = nL;
+	thread->now = now();
+	
+	lua_xmove(L, nL, lua_gettop(L)); /* move function and args over */
+	
+	if(!add_thread(current_queue, thread))
+		fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);
 }

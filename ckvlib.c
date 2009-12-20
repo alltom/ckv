@@ -96,11 +96,14 @@ static int ckv_ipairs (lua_State *L) {
   return 3;
 }
 
+static int ckv_now(lua_State *L) {
+	lua_pushnumber(L, now());
+	return 1;
+}
+
 static int ckv_fork(lua_State *L) {
-	int n = lua_gettop(L);  /* number of arguments */
-	fprintf(stderr, "spork got %d arguments\n", n);
-	lua_pop(L, n);
-	return 0; /* number of results */
+	fork_child(L);
+	return 0;
 }
 
 static int ckv_yield(lua_State *L) {
@@ -114,6 +117,7 @@ static const luaL_Reg ckvlib[] = {
 	{ "print", ckv_print },
 	{ "type", ckv_type },
 	{ "next", ckv_next },
+	{ "now", ckv_now },
 	{ "fork", ckv_fork },
 	{ "yield", ckv_yield },
 	{ NULL, NULL }
