@@ -32,8 +32,6 @@ main(int argc, char *argv[])
 	/* load ckv lib */
 	lua_pushcfunction(l, open_ckv); lua_call(l, 0, 0);
 	
-	printf("in C\n\n");
-	
 	switch(luaL_loadfile(l, argv[1])) {
 	case LUA_ERRSYNTAX:
 		fprintf(stderr, "syntax error\n");
@@ -54,8 +52,6 @@ main(int argc, char *argv[])
 		fprintf(stderr, "memory allocation error while running\n");
 		return EXIT_FAILURE;
 	}
-	
-	printf("\nin C again\n");
 	
 	lua_close(l);
 	
