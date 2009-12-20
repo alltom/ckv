@@ -22,3 +22,6 @@ end
 print("this is lua");
 print(1 + 1);
 fork(crazytown, 10);
+
+print("global BAR is:", global.BAR);
+global.BAR = "frank sinatra";
