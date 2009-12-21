@@ -152,7 +152,7 @@ main(int argc, char *argv[])
 		
 		switch(luaL_loadfile(thread->L, thread->filename)) {
 		case LUA_ERRSYNTAX:
-			fprintf(stderr, "syntax error: %s\n", thread->filename, lua_tostring(thread->L, -1));
+			fprintf(stderr, "syntax error: %s\n", lua_tostring(thread->L, -1));
 			break;
 		case LUA_ERRMEM:
 			fprintf(stderr, "memory allocation error while loading '%s'\n", thread->filename);
