@@ -81,8 +81,4 @@ global.BAR = "frank sinatra";
 
 yield(100);
 
-for k,v in pairs(global.threads) do
-	print("thread:", k, v);
-end
-
 print("done at:", now());

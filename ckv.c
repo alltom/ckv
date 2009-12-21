@@ -81,16 +81,15 @@ new_thread(lua_State *L, const char *filename, double now, VM *vm)
 	
 	/* append reference to this thread to THREADS_TABLE */
 	lua_getglobal(L, THREADS_TABLE); /* push threads table */
-	
-	lua_pushlightuserdata(L, thread); /* push pointer to Thread */
+	lua_pushlightuserdata(L, thread); /* push ThreadPtr */
 	lua_State *s = lua_newthread(L); /* push thread reference to L's stack */
-	lua_settable(L, -3); /* threads[thread] = s (pops s and thread) */
+	lua_settable(L, -3); /* threads[threadptr] = s (pops s and thread) */
+	lua_pop(L, 1); /* pop THREADS_TABLE */
 	
+	/* create lua state -> ThreadPtr entry */
 	lua_pushlightuserdata(L, s); /* push pointer to s */
 	lua_pushlightuserdata(L, thread); /* push pointer to Thread */
-	lua_settable(L, -3); /* threads[s] = thread (pops s and thread) */
-	
-	lua_pop(L, 1); /* pop THREADS_TABLE */
+	lua_settable(L, LUA_REGISTRYINDEX); /* registry[s] = thread (pops s and thread) */
 	
 	thread->filename = filename;
 	thread->L = s;
@@ -105,16 +104,14 @@ void
 unregister_thread(VM *vm, Thread *thread)
 {
 	lua_getglobal(vm->L, THREADS_TABLE); /* push threads table */
-	
 	lua_pushlightuserdata(vm->L, thread); /* push pointer to Thread */
 	lua_pushnil(vm->L); /* pushes nil */
 	lua_settable(vm->L, -3); /* threads[s] = nil (pops s and thread) */
+	lua_pop(vm->L, 1); /* pop THREADS_TABLE */
 	
 	lua_pushlightuserdata(vm->L, thread->L); /* push pointer to Thread */
 	lua_pushnil(vm->L); /* pushes nil */
-	lua_settable(vm->L, -3); /* threads[s] = nil (pops s and thread) */
-	
-	lua_pop(vm->L, 1); /* pop THREADS_TABLE */
+	lua_settable(vm->L, LUA_REGISTRYINDEX); /* registry[s] = nil (pops s and thread) */
 }
 
 /*
@@ -264,13 +261,10 @@ main(int argc, const char *argv[])
 Thread *
 get_thread(lua_State *L)
 {
-	lua_getglobal(L, GLOBAL_NAMESPACE); /* push globals namespace */
-	lua_pushstring(L, THREADS_TABLE); /* push "threads" */
-	lua_gettable(L, -2); /* get globals["threads"] (pops "threads" and pushes threads table) */
 	lua_pushlightuserdata(L, L); /* push pointer to thread state */
-	lua_gettable(L, -2); /* gets threads[thread state] (pops thread state ptr and pushes ThreadPtr) */
+	lua_gettable(L, LUA_REGISTRYINDEX); /* gets registry[thread state] (pops thread state ptr and pushes ThreadPtr) */
 	Thread *thread = lua_touserdata(L, -1);
-	lua_pop(L, 3); /* pops ThreadPtr, threads table, global namespace */
+	lua_pop(L, 1); /* pops ThreadPtr */
 	return thread;
 }
 
