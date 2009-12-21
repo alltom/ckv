@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define THREADS_TABLE "threads"
+
 typedef struct {
 	const char *filename;
 	lua_State *L;
@@ -19,8 +21,7 @@ static ThreadQueue *current_queue = NULL;
 static Thread *current_thread = NULL;
 
 /*
-creates a new thread and adds reference to the "threads"
-table in gL
+creates a new thread and adds reference to THREADS_TABLE in gL
 */
 static
 Thread *
@@ -30,11 +31,11 @@ new_thread(lua_State *gL, const char *filename, double now)
 	if(!thread)
 		return NULL;
 	
-	lua_getglobal(gL, "threads"); /* push threads table */
+	lua_getglobal(gL, THREADS_TABLE); /* push threads table */
 	lua_pushlightuserdata(gL, thread); /* push pointer to Thread */
 	lua_State *s = lua_newthread(gL); /* push thread reference to L's stack */
 	lua_settable(gL, -3); /* threads[thread] = s (pops s and thread) */
-	lua_pop(gL, 1); /* pop "threads" */
+	lua_pop(gL, 1); /* pop THREADS_TABLE */
 	
 	thread->filename = filename;
 	thread->L = s;
@@ -154,7 +155,7 @@ main(int argc, const char *argv[])
 	Its global environment is used for shred-accessible cross-shredd storage.
 	*/
 	lua_newtable(L); /* push an empty table */
-	lua_setglobal(L, "threads"); /* call the empty table "threads" (pops table) */
+	lua_setglobal(L, THREADS_TABLE); /* call the empty table THREADS_TABLE (pops table) */
 	
 	for(i = 0; i < num_scripts; i++) {
 		Thread *thread = new_thread(L, argv[i + 1], 0);
@@ -181,11 +182,11 @@ main(int argc, const char *argv[])
 		
 		switch(lua_resume(current_thread->L, lua_gettop(current_thread->L) - 1)) {
 		case 0:
-			lua_getglobal(L, "threads"); /* push threads table */
+			lua_getglobal(L, THREADS_TABLE); /* push threads table */
 			lua_pushlightuserdata(L, current_thread); /* push pointer to Thread */
 			lua_pushnil(L); /* pushes nil */
 			lua_settable(L, -3); /* threads[s] = nil (pops s and thread) */
-			lua_pop(L, 1); /* pop "threads" */
+			lua_pop(L, 1); /* pop THREADS_TABLE */
 			
 			unschedule_thread(&queue, current_thread);
 			break;
