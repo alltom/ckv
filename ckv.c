@@ -194,6 +194,47 @@ unschedule_thread(VM *vm, Thread *thread)
 	}
 }
 
+static
+void
+run_one(Thread *thread)
+{
+	VM *vm = thread->vm;
+	
+	switch(lua_resume(thread->L, lua_gettop(thread->L) - 1)) {
+	case 0:
+		unregister_thread(vm, thread);
+		unschedule_thread(vm, thread);
+		break;
+	case LUA_YIELD: {
+		lua_Number amount = luaL_checknumber(thread->L, -1);
+		if(amount > 0)
+			thread->now += amount;
+		break;
+	}
+	case LUA_ERRRUN:
+		fprintf(stderr, "runtime error in '%s': %s\n", thread->filename, lua_tostring(thread->L, -1));
+		unregister_thread(vm, thread);
+		unschedule_thread(vm, thread);
+		break;
+	case LUA_ERRMEM:
+		fprintf(stderr, "memory allocation error while running '%s'\n", thread->filename);
+		unregister_thread(vm, thread);
+		unschedule_thread(vm, thread);
+		break;
+	}
+}
+
+static
+void
+run(VM *vm)
+{
+	Thread *thread;
+	while(thread = next_thread(&vm->queue)) {
+		vm->now = thread->now;
+		run_one(thread);
+	}
+}
+
 int
 main(int argc, const char *argv[])
 {
@@ -226,30 +267,7 @@ main(int argc, const char *argv[])
 		}
 	}
 	
-	while(vm.queue.count > 0) {
-		Thread *thread = next_thread(&vm.queue);
-		
-		switch(lua_resume(thread->L, lua_gettop(thread->L) - 1)) {
-		case 0:
-			unregister_thread(&vm, thread);
-			unschedule_thread(&vm, thread);
-			break;
-		case LUA_YIELD: {
-			lua_Number amount = luaL_checknumber(thread->L, -1);
-			if(amount > 0)
-				thread->now += amount;
-			break;
-		}
-		case LUA_ERRRUN:
-			fprintf(stderr, "runtime error in '%s': %s\n", thread->filename, lua_tostring(thread->L, -1));
-			unschedule_thread(&vm, thread);
-			break;
-		case LUA_ERRMEM:
-			fprintf(stderr, "memory allocation error while running '%s'\n", thread->filename);
-			unschedule_thread(&vm, thread);
-			break;
-		}
-	}
+	run(&vm);
 	
 	close_vm(&vm);
 	
