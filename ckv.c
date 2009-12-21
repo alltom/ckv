@@ -17,6 +17,7 @@ typedef struct {
 	Thread **threads;
 } ThreadQueue;
 
+/* TODO: I should definitely remove these globals */
 static ThreadQueue *current_queue = NULL;
 static Thread *current_thread = NULL;
 
