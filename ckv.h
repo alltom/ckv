@@ -9,8 +9,9 @@
 typedef struct VM *VMPtr;
 typedef struct Thread *ThreadPtr;
 
-/* opens ckv library into a lua thread's env */
+/* opens ckv-specific lua libraries */
 int open_ckv(lua_State *L);
+int open_ckvugen(lua_State *L);
 
 ThreadPtr get_thread(lua_State *L); /* returns current thread */
 double now(ThreadPtr thread); /* returns current thread time */

@@ -133,18 +133,32 @@ static
 void
 prepenv(lua_State *L)
 {
-	lua_pushvalue(L, LUA_GLOBALSINDEX); /* push globals table */
-	lua_newtable(L); /* push an empty table */
-	lua_setfenv(L, 0); /* set env to the empty table */
-	lua_setglobal(L, GLOBAL_NAMESPACE); /* import old global env as "global" */
+	/* push current env on stack,
+	   create a new, empty env
+	   save reference to old env as "global" */
+	lua_pushvalue(L, LUA_GLOBALSINDEX);
+	lua_newtable(L);
+	lua_setfenv(L, 0);
+	lua_setglobal(L, GLOBAL_NAMESPACE);
 	
 	/* load all the libraries shreds could need */
-	lua_gc(L, LUA_GCSTOP, 0);  /* stop collector during initialization */
+	lua_gc(L, LUA_GCSTOP, 0); /* stop collector during initialization */
 	lua_pushcfunction(L, luaopen_string); lua_call(L, 0, 0);
 	lua_pushcfunction(L, luaopen_table); lua_call(L, 0, 0);
 	lua_pushcfunction(L, luaopen_math); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ckv); lua_call(L, 0, 0);
+	lua_pushcfunction(L, open_ckvugen); lua_call(L, 0, 0);
 	lua_gc(L, LUA_GCRESTART, 0);
+	
+	/* copy UGen-related functions from global env */
+	lua_getfield(L, LUA_GLOBALSINDEX, GLOBAL_NAMESPACE);
+	lua_getfield(L, -1, "UGen");
+	lua_setfield(L, LUA_GLOBALSINDEX, "UGen");
+	lua_getfield(L, -1, "connect");
+	lua_setfield(L, LUA_GLOBALSINDEX, "connect");
+	lua_getfield(L, -1, "disconnect");
+	lua_setfield(L, LUA_GLOBALSINDEX, "disconnect");
+	lua_pop(L, 1); /* pop "global" */
 }
 
 /* returns 0 on failure */
@@ -250,12 +264,12 @@ void
 render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
              double streamTime, void *userData)
 {
-	/* VM *vm = (VM *)userData; */
-	unsigned int i, j;
-
+	VM *vm = (VM *)userData;
+	unsigned int i;
 	static int s = 0;
+	
 	for(i = 0; i < nFrames; i++) {
-		outputBuffer[i * 2 + j] = sin(s++ / 30.0);
+		outputBuffer[i] = sin(s++ / 30.0);
 	}
 }
 
@@ -296,8 +310,8 @@ main(int argc, const char *argv[])
 		return EXIT_FAILURE;
 	}
 	
-	sleep(20);
-	/* run(&vm); */
+	/* sleep(20); */
+	run(&vm);
 	
 	stop_audio();
 	

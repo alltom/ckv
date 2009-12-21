@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -g -ansi -Wall
 LDFLAGS = -llua -lrtaudio -framework CoreAudio -lpthread
-OBJECTS = ckv.o ckvlib.o ckvaudio.o
+OBJECTS = ckv.o ckvlib.o ckvugen.o ckvaudio.o
 EXECUTABLE=ckv
 
 $(EXECUTABLE): $(OBJECTS)

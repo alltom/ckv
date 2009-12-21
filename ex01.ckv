@@ -1,32 +1,3 @@
-UGen = {
-	initialize_io = function(self)
-		self.inputs = {};
-		UGen.create_input(self, "default");
-		return self;
-	end,
-	
-	create_input = function(self, name)
-		self.inputs[name] = {};
-		return self;
-	end,
-	
-	sum_inputs = function(self, port)
-		out = 0;
-		for source, x in pairs(self.inputs[port]) do
-			out = out + source:tick();
-		end
-		return out;
-	end,
-}
-
-function connect(source, dest, port)
-	dest.inputs[port or "default"][source] = true
-end
-
-function disconnect(source, dest, port)
-	dest.inputs[port or "default"][source] = nil
-end
-
 Gain = {
 	new = function(class, gain)
 		return UGen.initialize_io({
