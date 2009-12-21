@@ -1,13 +1,13 @@
--- an example of how to define a class
-
 UGen = {
 	initialize_io = function(self)
 		self.inputs = {};
 		UGen.create_input(self, "default");
+		return self;
 	end,
 	
 	create_input = function(self, name)
 		self.inputs[name] = {};
+		return self;
 	end,
 	
 	sum_inputs = function(self, port)
@@ -28,24 +28,23 @@ function disconnect(source, dest, port)
 end
 
 Gain = {
-	new = function(class)
-		instance = {
+	new = function(class, gain)
+		return UGen.initialize_io({
+			gain = gain or 1.0,
 			tick = function(self)
 				if not(now() == self.last_tick) then
-					self.last_value = UGen.sum_inputs(self, "default");
+					self.last_value = self.gain * UGen.sum_inputs(self, "default");
 					self.last_tick = now();
 				end
 				return self.last_value;
-			end
-		}
-		UGen.initialize_io(instance);
-		return instance;
+			end,
+		})
 	end
 };
 
 SinOsc = {
 	new = function(class)
-		return {
+		return UGen.initialize_io({
 			phase = 0.0,
 			freq = 1.0,
 			last_value = 0.0,
@@ -57,7 +56,7 @@ SinOsc = {
 				end
 				return self.last_value;
 			end,
-		}
+		})
 	end
 };
 
