@@ -1,26 +1,79 @@
 -- an example of how to define a class
-Foo = {
-	new = function(self)
+
+UGen = {
+	initialize_io = function(self)
+		self.inputs = {};
+		UGen.create_input(self, "default");
+	end,
+	
+	create_input = function(self, name)
+		self.inputs[name] = {};
+	end,
+	
+	sum_inputs = function(self, port)
+		out = 0;
+		for source, x in pairs(self.inputs[port]) do
+			out = out + source:tick();
+		end
+		return out;
+	end,
+}
+
+function connect(source, dest, port)
+	dest.inputs[port or "default"][source] = true
+end
+
+function disconnect(source, dest, port)
+	dest.inputs[port or "default"][source] = nil
+end
+
+Gain = {
+	new = function(class)
+		instance = {
+			tick = function(self)
+				if not(now() == self.last_tick) then
+					self.last_value = UGen.sum_inputs(self, "default");
+					self.last_tick = now();
+				end
+				return self.last_value;
+			end
+		}
+		UGen.initialize_io(instance);
+		return instance;
+	end
+};
+
+SinOsc = {
+	new = function(class)
 		return {
-			value = "foo.",
-			print = function(self)
-				print("you printed a Foo:", self.value);
+			phase = 0.0,
+			freq = 1.0,
+			last_value = 0.0,
+			tick = function(self)
+				if not (now() == self.last_tick) then
+					self.last_value = math.sin(self.phase * math.pi * 2.0);
+					self.phase = (self.phase + self.freq / 44100.0) % 1.0;
+					self.last_tick = now();
+				end
+				return self.last_value;
 			end,
 		}
 	end
 };
 
-foo = Foo:new();
-foo:print();
-
-function crazytown(n)
-	print("entering crazytown");
-	print(n);
-	print("exiting crazytown");
+s = SinOsc:new();
+g = Gain:new();
+connect(s, g);
+for i = 1, 10, 1 do
+	print("ugens:", g:tick(), s:tick());
+	yield(1);
 end
 
-print("this is lua");
-print(1 + 1);
+function crazytown(n)
+	print("forked threads say", n);
+	yield(100);
+	print("forked threads also say pie!");
+end
 fork(crazytown, 10);
 
 print("global BAR is:", global.BAR);
@@ -29,7 +82,7 @@ global.BAR = "frank sinatra";
 yield(100);
 
 for k,v in pairs(global.threads) do
-	print("yay", k, v);
+	print("thread:", k, v);
 end
 
 print("done at:", now());
