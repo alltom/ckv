@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <math.h>
 
 #define THREADS_TABLE "threads"
 #define GLOBAL_NAMESPACE "global"
@@ -24,6 +26,10 @@ typedef struct VM {
 	Thread *current_thread;
 	lua_State *L; /* global global state */
 	double now;
+	
+	double audio_now;
+	int sample_rate;
+	int channels;
 } VM;
 
 /* returns 0 on failure */
@@ -32,6 +38,10 @@ int
 init_vm(VM *vm)
 {
 	vm->now = 0;
+	
+	vm->audio_now = 0;
+	vm->sample_rate = 44100;
+	vm->channels = 1;
 	
 	vm->L = luaL_newstate();
 	if(vm->L == NULL) {
@@ -229,9 +239,23 @@ void
 run(VM *vm)
 {
 	Thread *thread;
-	while(thread = next_thread(&vm->queue)) {
+	while((thread = next_thread(&vm->queue)) != NULL) {
 		vm->now = thread->now;
 		run_one(thread);
+	}
+}
+
+static
+void
+render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
+             double streamTime, void *userData)
+{
+	/* VM *vm = (VM *)userData; */
+	unsigned int i, j;
+
+	static int s = 0;
+	for(i = 0; i < nFrames; i++) {
+		outputBuffer[i * 2 + j] = sin(s++ / 30.0);
 	}
 }
 
@@ -267,7 +291,15 @@ main(int argc, const char *argv[])
 		}
 	}
 	
-	run(&vm);
+	if(!start_audio(render_audio, &vm)) {
+		fprintf(stderr, "could not start audio\n");
+		return EXIT_FAILURE;
+	}
+	
+	sleep(20);
+	/* run(&vm); */
+	
+	stop_audio();
 	
 	close_vm(&vm);
 	
