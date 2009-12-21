@@ -97,17 +97,17 @@ static int ckv_ipairs (lua_State *L) {
 }
 
 static int ckv_now(lua_State *L) {
-	lua_pushnumber(L, now());
+	lua_pushnumber(L, now(get_thread(L)));
 	return 1;
 }
 
 static int ckv_fork(lua_State *L) {
-	fork_child(L);
+	fork_child(get_thread(L));
 	return 0;
 }
 
 static int ckv_fork_eval(lua_State *L) {
-	fork_child_with_eval(L);
+	fork_child_with_eval(get_thread(L));
 	return 0;
 }
 
