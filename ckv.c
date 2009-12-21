@@ -110,7 +110,7 @@ next_thread(ThreadQueue *queue)
 
 static
 void
-remove_thread(ThreadQueue *queue, Thread *thread)
+unschedule_thread(ThreadQueue *queue, Thread *thread)
 {
 	int i;
 	for(i = 0; i < queue->count; i++) {
@@ -187,7 +187,7 @@ main(int argc, const char *argv[])
 			lua_settable(L, -3); /* threads[s] = nil (pops s and thread) */
 			lua_pop(L, 1); /* pop "threads" */
 			
-			remove_thread(&queue, current_thread);
+			unschedule_thread(&queue, current_thread);
 			break;
 		case LUA_YIELD: {
 			lua_Number amount = luaL_checknumber(current_thread->L, -1);
@@ -197,11 +197,11 @@ main(int argc, const char *argv[])
 		}
 		case LUA_ERRRUN:
 			fprintf(stderr, "runtime error in '%s': %s\n", current_thread->filename, lua_tostring(current_thread->L, -1));
-			remove_thread(&queue, current_thread);
+			unschedule_thread(&queue, current_thread);
 			break;
 		case LUA_ERRMEM:
 			fprintf(stderr, "memory allocation error while running '%s'\n", current_thread->filename);
-			remove_thread(&queue, current_thread);
+			unschedule_thread(&queue, current_thread);
 			break;
 		}
 	}
