@@ -19,6 +19,31 @@ static ThreadQueue *current_queue = NULL;
 static Thread *current_thread = NULL;
 
 /*
+creates a new thread and adds reference to the "threads"
+table in gL
+*/
+static
+Thread *
+new_thread(lua_State *gL, const char *filename, double now)
+{
+	Thread *thread = malloc(sizeof(Thread));
+	if(!thread)
+		return NULL;
+	
+	lua_getglobal(gL, "threads"); /* push threads table */
+	lua_pushlightuserdata(gL, thread); /* push pointer to Thread */
+	lua_State *s = lua_newthread(gL); /* push thread reference to L's stack */
+	lua_settable(gL, -3); /* threads[thread] = s (pops s and thread) */
+	lua_pop(gL, 1); /* pop "threads" */
+	
+	thread->filename = filename;
+	thread->L = s;
+	thread->now = now;
+	
+	return thread;
+}
+
+/*
 Create a private global namespace for this thread,
 leaving a reference ("global") to the global global namespace.
 This is only done for files. Their children inherit the parent's namepsace.
@@ -44,7 +69,7 @@ prepenv(lua_State *L)
 /* returns 0 on failure */
 static
 int
-add_thread(ThreadQueue *queue, Thread *thread)
+schedule_thread(ThreadQueue *queue, Thread *thread)
 {
 	if(queue->count == queue->capacity) {
 		fprintf(stderr, "resizing thread queue\n");
@@ -99,7 +124,7 @@ remove_thread(ThreadQueue *queue, Thread *thread)
 }
 
 int
-main(int argc, char *argv[])
+main(int argc, const char *argv[])
 {
 	ThreadQueue queue;
 	int num_scripts = argc - 1;
@@ -132,22 +157,7 @@ main(int argc, char *argv[])
 	lua_setglobal(L, "threads"); /* call the empty table "threads" (pops table) */
 	
 	for(i = 0; i < num_scripts; i++) {
-		Thread *thread = malloc(sizeof(Thread));
-		if(!thread) {
-			fprintf(stderr, "could not allocate thread for '%s'\n", argv[1 + i]);
-			return EXIT_FAILURE;
-		}
-		
-		lua_getglobal(L, "threads"); /* push threads table */
-		lua_pushlightuserdata(L, thread); /* push pointer to Thread */
-		lua_State *s = lua_newthread(L); /* push thread reference to L's stack */
-		lua_settable(L, -3); /* threads[thread] = s (pops s and thread) */
-		lua_pop(L, 1); /* pop "threads" */
-		
-		thread->filename = argv[1 + i];
-		thread->L = s;
-		thread->now = 0;
-		
+		Thread *thread = new_thread(L, argv[i + 1], 0);
 		prepenv(thread->L);
 		
 		switch(luaL_loadfile(thread->L, thread->filename)) {
@@ -161,7 +171,7 @@ main(int argc, char *argv[])
 			fprintf(stderr, "cannot open script '%s'\n", thread->filename);
 			break;
 		default:
-			if(!add_thread(&queue, thread))
+			if(!schedule_thread(&queue, thread))
 				fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);
 		}
 	}
@@ -214,56 +224,39 @@ now(void)
 void
 fork_child(lua_State *L)
 {
-	lua_State *nL;
-	Thread *thread = malloc(sizeof(Thread));
+	Thread *thread = new_thread(L, "", now());
 	if(!thread) {
 		fprintf(stderr, "could not allocate thread for child thread of '%s'\n", current_thread == NULL ? "(null)" : current_thread->filename);
 		return;
 	}
 	
-	lua_getglobal(L, "threads"); /* push threads table */
-	lua_pushlightuserdata(L, thread); /* push pointer to Thread */
-	nL = lua_newthread(L); /* push thread reference to L's stack */
-	lua_settable(L, -3); /* threads[thread] = s (pops s and thread) */
-	lua_pop(L, 1); /* pop "threads" */
+	lua_xmove(L, thread->L, lua_gettop(L)); /* move function and args over */
 	
-	thread->filename = "";
-	thread->L = nL;
-	thread->now = now();
-	
-	lua_xmove(L, nL, lua_gettop(L)); /* move function and args over */
-	
-	if(!add_thread(current_queue, thread))
+	if(!schedule_thread(current_queue, thread))
 		fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);
 }
 
 void
 fork_child_with_eval(lua_State *L)
 {
-	lua_State *nL;
 	const char *code = luaL_checkstring(L, -1);
-	Thread *thread = malloc(sizeof(Thread));
+	Thread *thread = new_thread(L, "", now());
 	if(!thread) {
 		fprintf(stderr, "could not allocate thread for child thread of '%s'\n", current_thread == NULL ? "(null)" : current_thread->filename);
 		return;
 	}
 	
-	lua_getglobal(L, "threads"); /* push threads table */
-	lua_pushlightuserdata(L, thread); /* push pointer to Thread */
-	nL = lua_newthread(L); /* push thread reference to L's stack */
-	lua_settable(L, -3); /* threads[thread] = s (pops s and thread) */
-	lua_pop(L, 1); /* pop "threads" */
-	
-	thread->filename = "";
-	thread->L = nL;
-	thread->now = now();
-	
-	if(luaL_loadstring(nL, code)) {
-		fprintf(stderr, "could not create thread: %s\n", luaL_checkstring(L, -1));
+	switch(luaL_loadstring(thread->L, code)) {
+	case LUA_ERRSYNTAX:
+		fprintf(stderr, "could not create thread: syntax error: %s\n", lua_tostring(thread->L, -1));
 		free(thread);
-		return;
+		break;
+	case LUA_ERRMEM:
+		fprintf(stderr, "could not create thread: memory allocation error\n");
+		free(thread);
+		break;
+	default:
+		if(!schedule_thread(current_queue, thread))
+			fprintf(stderr, "could not add to thread queue\n");
 	}
-	
-	if(!add_thread(current_queue, thread))
-		fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);
 }
