@@ -74,6 +74,7 @@ function crazytown(n)
 	print("forked threads also say pie!");
 end
 fork(crazytown, 10);
+fork_eval("print('this was eval\\'d!')");
 
 print("global BAR is:", global.BAR);
 global.BAR = "frank sinatra";
