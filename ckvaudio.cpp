@@ -34,7 +34,7 @@ start_audio(AudioCallback _callback, void *data)
 	
 	RtAudio::StreamParameters parameters;
 	parameters.deviceId = dac.getDefaultOutputDevice();
-	parameters.nChannels = 1;
+	parameters.nChannels = 2;
 	parameters.firstChannel = 0;
 	unsigned int sampleRate = 44100;
 	unsigned int bufferFrames = 256;

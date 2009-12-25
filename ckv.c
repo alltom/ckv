@@ -299,7 +299,8 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 		lua_getfield(vm->L, -1, "tick");
 		lua_pushvalue(vm->L, -2); /* push dac */
 		lua_call(vm->L, 1, 1); /* dac.tick(dac) yields a sample */
-		outputBuffer[i] = lua_tonumber(vm->L, -1);
+		outputBuffer[i * 2] = lua_tonumber(vm->L, -1);
+		outputBuffer[i * 2 + 1] = outputBuffer[i * 2];
 		lua_pop(vm->L, 2); /* pop sample and dac */
 		
 		vm->audio_now++;
