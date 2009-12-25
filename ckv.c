@@ -280,18 +280,20 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	Thread *thread;
 	unsigned int i;
 	
-	thread = next_thread(&vm->queue);
-	if(thread != NULL)
-		vm->now = thread->now;
-	
 	for(i = 0; i < nFrames; i++) {
 		if(vm->now < vm->audio_now) {
 			thread = next_thread(&vm->queue);
-			if(thread != NULL) {
+			if(thread == NULL) {
+				vm->now = vm->audio_now;
+			} else {
 				vm->now = thread->now;
 				run_one(thread);
-			} else {
-				vm->now = vm->audio_now;
+				
+				thread = next_thread(&vm->queue);
+				if(thread == NULL)
+					vm->now = vm->audio_now;
+				else
+					vm->now = thread->now;
 			}
 		}
 		
