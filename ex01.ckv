@@ -1,8 +1,8 @@
 SinOsc = {
-	new = function(class)
+	new = function(class, freq)
 		return UGen.initialize_io({
 			phase = 0.0,
-			freq = 440.0,
+			freq = freq or 440.0,
 			last_value = 0.0,
 			tick = function(self)
 				if not (now() == self.last_tick) then
@@ -16,11 +16,12 @@ SinOsc = {
 	end
 };
 
-s = SinOsc:new();
-connect(s, dac);
-for i = 1, 10, 1 do
-	print("ugens:", dac:tick(), s:tick());
-	yield(1);
+howmany = 10;
+
+g = Gain:new(1.0 / howmany);
+connect(g, dac);
+for i = 1, howmany, 1 do
+	connect(SinOsc:new(100 + i * 100), g)
 end
 
 function crazytown(n)
