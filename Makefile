@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g -ansi -Wall
+CFLAGS = -g -ansi -Wall -O3
 LDFLAGS = -llua -lrtaudio -framework CoreAudio -lpthread
 OBJECTS = ckv.o ckvlib.o ckvugen.o ckvaudio.o
 EXECUTABLE=ckv
