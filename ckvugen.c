@@ -105,7 +105,7 @@ static int ckv_disconnect(lua_State *L) {
 static int ckv_gain_tick(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	
-	lua_Number last_tick, last_value;
+	lua_Number gain, last_tick, last_value;
 	
 	lua_getfield(L, -1, "last_tick");
 	last_tick = lua_tonumber(L, -1);
@@ -117,6 +117,10 @@ static int ckv_gain_tick(lua_State *L) {
 	
 	double tnow = now(get_thread(L));
 	if(tnow > last_tick) {
+		lua_getfield(L, -1, "gain");
+		gain = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+		
 		lua_pushnumber(L, tnow);
 		lua_setfield(L, 1, "last_tick");
 		
@@ -126,7 +130,10 @@ static int ckv_gain_tick(lua_State *L) {
 		lua_pushstring(L, "default");
 		lua_call(L, 2, 1); /* UGen.sum_inputs(self, "default") */
 		
-		last_value = lua_tonumber(L, -1);
+		last_value = gain * lua_tonumber(L, -1);
+		lua_pop(L, 1);
+		lua_pushnumber(L, last_value);
+		
 		lua_setfield(L, 1, "last_value");
 		lua_pop(L, 1); /* pop UGen */
 		
