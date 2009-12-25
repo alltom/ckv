@@ -27,10 +27,12 @@ typedef struct VM {
 	lua_State *L; /* global global state */
 	double now;
 	
-	double audio_now;
+	unsigned int audio_now; /* used in audio callback; unused in silent mode */
 	int sample_rate;
 	int channels;
 } VM;
+
+VM *g_vm; /* TODO: remove this HACK once again! */
 
 /* returns 0 on failure */
 static
@@ -274,12 +276,33 @@ void
 render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
              double streamTime, void *userData)
 {
-	/* VM *vm = (VM *)userData; */
+	VM *vm = (VM *)userData;
+	Thread *thread;
 	unsigned int i;
-	static int s = 0;
+	
+	thread = next_thread(&vm->queue);
+	if(thread != NULL)
+		vm->now = thread->now;
 	
 	for(i = 0; i < nFrames; i++) {
-		outputBuffer[i] = sin(s++ / 30.0);
+		if(vm->now < vm->audio_now) {
+			thread = next_thread(&vm->queue);
+			if(thread != NULL) {
+				vm->now = thread->now;
+				run_one(thread);
+			} else {
+				vm->now = vm->audio_now;
+			}
+		}
+		
+		lua_getglobal(vm->L, "dac");
+		lua_getfield(vm->L, -1, "tick");
+		lua_pushvalue(vm->L, -2); /* push dac */
+		lua_call(vm->L, 1, 1); /* dac.tick(dac) yields a sample */
+		outputBuffer[i] = lua_tonumber(vm->L, -1);
+		lua_pop(vm->L, 2); /* pop sample and dac */
+		
+		vm->audio_now++;
 	}
 }
 
@@ -289,11 +312,14 @@ main(int argc, const char *argv[])
 	VM vm;
 	int num_scripts = argc - 1;
 	int i;
+	int silent_mode = 0;
 	
 	if(!init_vm(&vm)) {
 		fprintf(stderr, "could not initialize VM\n");
 		return EXIT_FAILURE;
 	}
+	
+	g_vm = &vm;
 	
 	for(i = 0; i < num_scripts; i++) {
 		Thread *thread = new_thread(vm.L, argv[i + 1], 0, &vm);
@@ -315,15 +341,22 @@ main(int argc, const char *argv[])
 		}
 	}
 	
-	if(!start_audio(render_audio, &vm)) {
-		fprintf(stderr, "could not start audio\n");
-		return EXIT_FAILURE;
+	if(silent_mode) {
+		
+		run(&vm);
+		
+	} else {
+		
+		if(!start_audio(render_audio, &vm)) {
+			fprintf(stderr, "could not start audio\n");
+			return EXIT_FAILURE;
+		}
+		
+		sleep(20);
+		
+		stop_audio();
+		
 	}
-	
-	/* sleep(20); */
-	run(&vm);
-	
-	stop_audio();
 	
 	close_vm(&vm);
 	
@@ -345,7 +378,10 @@ get_thread(lua_State *L)
 double
 now(Thread *thread)
 {
-	return thread->now;
+	if(thread)
+		return thread->now;
+	else
+		return g_vm->now;
 }
 
 void
