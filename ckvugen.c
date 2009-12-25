@@ -1,6 +1,8 @@
 
 #include "ckv.h"
 
+/* UGen HELPER FUNCTIONS */
+
 /* args: self */
 static int ckv_ugen_initialize_io(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
@@ -63,6 +65,8 @@ static int ckv_ugen_sum_inputs(lua_State *L) {
 	return 1;
 }
 
+/* CONNECT & DISCONNECT */
+
 /* args: source, dest, port */
 static int ckv_connect(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
@@ -95,26 +99,66 @@ static int ckv_disconnect(lua_State *L) {
 	return 0;
 }
 
+/* GAIN */
+
+/* args: self */
+static int ckv_gain_tick(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	
+	return 0;
+}
+
+static const luaL_Reg ckvugen_gain[] = {
+	{ "tick", ckv_gain_tick },
+	{ NULL, NULL }
+};
+
+/* args: Gain (class), gain (amount) */
+static int ckv_gain_new(lua_State *L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+	double gain = lua_isnumber(L, 2) ? lua_tonumber(L, 2) : 1;
+	
+	/* self */
+	lua_createtable(L, 2 /* non-array */, 0 /* array */);
+	
+	/* self.gain = gain */
+	lua_pushnumber(L, gain);
+	lua_setfield(L, -2, "gain");
+	
+	/* add gain methods */
+	luaL_register(L, NULL, ckvugen_gain);
+	
+	/* UGen.initialize_io(self) */
+	lua_getfield(L, LUA_GLOBALSINDEX, "UGen");
+	lua_getfield(L, -1, "initialize_io");
+	lua_pushvalue(L, -3); /* self */
+	lua_call(L, 1, 0);
+	lua_pop(L, 1); /* pop UGen */
+	
+	return 1; /* return self */
+}
+
 /* LIBRARY REGISTRATION */
-
-static const luaL_Reg ckvugen[] = {
-	{ "initialize_io", ckv_ugen_initialize_io },
-	{ "create_input", ckv_ugen_create_input },
-	{ "sum_inputs", ckv_ugen_sum_inputs },
-	{ NULL, NULL }
-};
-
-static const luaL_Reg ckvugenetc[] = {
-	{ "connect", ckv_connect },
-	{ "disconnect", ckv_disconnect },
-	{ NULL, NULL }
-};
 
 /* opens ckv library */
 int open_ckvugen(lua_State *L) {
+	/* UGen */
+	lua_createtable(L, 0, 3 /* estimated number of functions */);
+	lua_pushcfunction(L, ckv_ugen_initialize_io); lua_setfield(L, -2, "initialize_io");
+	lua_pushcfunction(L, ckv_ugen_create_input);  lua_setfield(L, -2, "create_input");
+	lua_pushcfunction(L, ckv_ugen_sum_inputs);    lua_setfield(L, -2, "sum_inputs");
+	lua_setglobal(L, "UGen");
+	
+	/* Gain */
+	lua_createtable(L, 0, 1 /* estimated number of functions */);
+	lua_pushcfunction(L, ckv_gain_new); lua_setfield(L, -2, "new");
+	lua_setglobal(L, "Gain"); /* pops */
+	
+	/* connect & disconnect */
 	lua_pushvalue(L, LUA_GLOBALSINDEX);
-	luaL_register(L, "UGen", ckvugen);
-	lua_pop(L, 1); /* pop UGen */
-	luaL_register(L, NULL, ckvugenetc);
+	lua_pushcfunction(L, ckv_connect); lua_setfield(L, -2, "connect");
+	lua_pushcfunction(L, ckv_disconnect); lua_setfield(L, -2, "disconnect");
+	lua_pop(L, 1);
+	
 	return 1; /* return globals */
 }

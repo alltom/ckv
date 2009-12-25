@@ -6,8 +6,8 @@
 #include <unistd.h>
 #include <math.h>
 
-#define THREADS_TABLE "threads"
 #define GLOBAL_NAMESPACE "global"
+#define THREADS_TABLE "threads"
 
 typedef struct Thread {
 	const char *filename;
@@ -57,14 +57,23 @@ init_vm(VM *vm)
 		return 0;
 	}
 	
-	/*
-	L is never executed.
-	It's just used for holding references to the other threads
-	  to keep them from being garbage collected.
-	Its global environment is used for shred-accessible cross-shredd storage.
-	*/
-	lua_newtable(vm->L); /* push an empty table */
-	lua_setglobal(vm->L, THREADS_TABLE); /* call the empty table THREADS_TABLE (pops table) */
+	/* create table to use as global namespace */
+	lua_newtable(vm->L);
+	lua_setfield(vm->L, LUA_REGISTRYINDEX, GLOBAL_NAMESPACE);
+	
+	/* create a table for storing lua thread references */
+	lua_pushstring(vm->L, THREADS_TABLE);
+	lua_newtable(vm->L);
+	lua_rawset(vm->L, LUA_REGISTRYINDEX);
+	
+	/* load all the libraries a thread could need */
+	lua_gc(vm->L, LUA_GCSTOP, 0); /* stop collector during initialization */
+	lua_pushcfunction(vm->L, luaopen_string); lua_call(vm->L, 0, 0);
+	lua_pushcfunction(vm->L, luaopen_table); lua_call(vm->L, 0, 0);
+	lua_pushcfunction(vm->L, luaopen_math); lua_call(vm->L, 0, 0);
+	lua_pushcfunction(vm->L, open_ckv); lua_call(vm->L, 0, 0);
+	lua_pushcfunction(vm->L, open_ckvugen); lua_call(vm->L, 0, 0);
+	lua_gc(vm->L, LUA_GCRESTART, 0);
 	
 	return 1;
 }
@@ -73,33 +82,37 @@ static
 void
 close_vm(VM *vm)
 {
+	/* TODO: free threads */
 	free(vm->queue.threads);
 	lua_close(vm->L);
-	/* free threads? */
 }
 
 /*
-creates a new thread and adds references to THREADS_TABLE in gL
+creates a new thread and adds reference to THREADS_TABLE
 */
 static
 Thread *
 new_thread(lua_State *L, const char *filename, double now, VM *vm)
 {
-	Thread *thread = malloc(sizeof(Thread));
+	lua_State *s; /* new thread state */
+	Thread *thread;
+	
+	thread = malloc(sizeof(Thread));
 	if(!thread)
 		return NULL;
 	
-	/* append reference to this thread to THREADS_TABLE */
-	lua_getglobal(L, THREADS_TABLE); /* push threads table */
-	lua_pushlightuserdata(L, thread); /* push ThreadPtr */
-	lua_State *s = lua_newthread(L); /* push thread reference to L's stack */
-	lua_settable(L, -3); /* threads[threadptr] = s (pops s and thread) */
-	lua_pop(L, 1); /* pop THREADS_TABLE */
+	/* create the thread and save a reference in THREADS_TABLE */
+	/* threads are garbage collected, so reference is saved until unregister_thread */
+	lua_getfield(L, LUA_REGISTRYINDEX, THREADS_TABLE);
+	s = lua_newthread(L); /* pushes thread reference */
+	lua_pushlightuserdata(L, s);
+	lua_pushvalue(L, -2); /* push thread ref again so it's on top */
+	lua_rawset(L, -4); /* registry.threads[thread] = lua thread ref */
+	lua_pop(L, 2); /* pop original lua thread ref and registry.threads */
 	
-	/* create lua state -> ThreadPtr entry */
-	lua_pushlightuserdata(L, s); /* push pointer to s */
-	lua_pushlightuserdata(L, thread); /* push pointer to Thread */
-	lua_settable(L, LUA_REGISTRYINDEX); /* registry[s] = thread (pops s and thread) */
+	lua_pushlightuserdata(s, s);
+	lua_pushlightuserdata(s, thread);
+	lua_settable(s, LUA_REGISTRYINDEX); /* registry[state] = thread */
 	
 	thread->filename = filename;
 	thread->L = s;
@@ -113,15 +126,15 @@ static
 void
 unregister_thread(VM *vm, Thread *thread)
 {
-	lua_getglobal(vm->L, THREADS_TABLE); /* push threads table */
-	lua_pushlightuserdata(vm->L, thread); /* push pointer to Thread */
-	lua_pushnil(vm->L); /* pushes nil */
-	lua_settable(vm->L, -3); /* threads[s] = nil (pops s and thread) */
-	lua_pop(vm->L, 1); /* pop THREADS_TABLE */
+	lua_pushlightuserdata(vm->L, thread->L);
+	lua_pushnil(vm->L);
+	lua_settable(vm->L, LUA_REGISTRYINDEX); /* registry[state] = nil */
 	
-	lua_pushlightuserdata(vm->L, thread->L); /* push pointer to Thread */
-	lua_pushnil(vm->L); /* pushes nil */
-	lua_settable(vm->L, LUA_REGISTRYINDEX); /* registry[s] = nil (pops s and thread) */
+	lua_getfield(vm->L, LUA_REGISTRYINDEX, THREADS_TABLE);
+	lua_pushlightuserdata(vm->L, thread->L);
+	lua_pushnil(vm->L);
+	lua_settable(vm->L, -3); /* registry.threads[state] = nil */
+	lua_pop(vm->L, 1); /* pop registry.threads */
 }
 
 /*
@@ -131,34 +144,31 @@ This is only done for files. Their children inherit the parent's namepsace.
 */
 static
 void
-prepenv(lua_State *L)
+prepenv(VM *vm, lua_State *L)
 {
-	/* push current env on stack,
-	   create a new, empty env
-	   save reference to old env as "global" */
-	lua_pushvalue(L, LUA_GLOBALSINDEX);
+	/* get lua thread ref */
+	lua_pushthread(L);
+	
+	/* get "global", give thread a blank env, then copy "global" to it */
+	lua_getfield(L, LUA_REGISTRYINDEX, GLOBAL_NAMESPACE);
 	lua_newtable(L);
-	lua_setfenv(L, 0);
-	lua_setglobal(L, GLOBAL_NAMESPACE);
+	lua_setfenv(L, -3); /* makes the newtable the env for the thread we pushed above */
+	lua_setglobal(L, GLOBAL_NAMESPACE); /* set "global" in new namespace */
 	
-	/* load all the libraries shreds could need */
-	lua_gc(L, LUA_GCSTOP, 0); /* stop collector during initialization */
-	lua_pushcfunction(L, luaopen_string); lua_call(L, 0, 0);
-	lua_pushcfunction(L, luaopen_table); lua_call(L, 0, 0);
-	lua_pushcfunction(L, luaopen_math); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ckv); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ckvugen); lua_call(L, 0, 0);
-	lua_gc(L, LUA_GCRESTART, 0);
+	lua_pop(L, 1); /* pop lua thread ref; stack empty */
 	
-	/* copy UGen-related functions from global env */
-	lua_getfield(L, LUA_GLOBALSINDEX, GLOBAL_NAMESPACE);
-	lua_getfield(L, -1, "UGen");
-	lua_setfield(L, LUA_GLOBALSINDEX, "UGen");
-	lua_getfield(L, -1, "connect");
-	lua_setfield(L, LUA_GLOBALSINDEX, "connect");
-	lua_getfield(L, -1, "disconnect");
-	lua_setfield(L, LUA_GLOBALSINDEX, "disconnect");
-	lua_pop(L, 1); /* pop "global" */
+	/* copy everything in prototype global env to this env */
+	lua_pushnil(vm->L);  /* first key */
+	while(lua_next(vm->L, LUA_GLOBALSINDEX) != 0) {
+		/* copy to new env */
+		lua_pushvalue(vm->L, -2); /* push key */
+		lua_pushvalue(vm->L, -2); /* push value */
+		lua_xmove(vm->L, L, 2);
+		lua_rawset(L, LUA_GLOBALSINDEX);
+		
+		/* removes 'value'; keeps 'key' for next iteration */
+		lua_pop(vm->L, 1);
+	}
 }
 
 /* returns 0 on failure */
@@ -226,8 +236,8 @@ run_one(Thread *thread)
 	
 	switch(lua_resume(thread->L, lua_gettop(thread->L) - 1)) {
 	case 0:
-		unregister_thread(vm, thread);
 		unschedule_thread(vm, thread);
+		unregister_thread(vm, thread);
 		break;
 	case LUA_YIELD: {
 		lua_Number amount = luaL_checknumber(thread->L, -1);
@@ -236,14 +246,14 @@ run_one(Thread *thread)
 		break;
 	}
 	case LUA_ERRRUN:
-		fprintf(stderr, "runtime error in '%s': %s\n", thread->filename, lua_tostring(thread->L, -1));
-		unregister_thread(vm, thread);
+		fprintf(stderr, "runtime error: %s\n", lua_tostring(thread->L, -1));
 		unschedule_thread(vm, thread);
+		unregister_thread(vm, thread);
 		break;
 	case LUA_ERRMEM:
 		fprintf(stderr, "memory allocation error while running '%s'\n", thread->filename);
-		unregister_thread(vm, thread);
 		unschedule_thread(vm, thread);
+		unregister_thread(vm, thread);
 		break;
 	}
 }
@@ -264,7 +274,7 @@ void
 render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
              double streamTime, void *userData)
 {
-	VM *vm = (VM *)userData;
+	/* VM *vm = (VM *)userData; */
 	unsigned int i;
 	static int s = 0;
 	
@@ -287,7 +297,7 @@ main(int argc, const char *argv[])
 	
 	for(i = 0; i < num_scripts; i++) {
 		Thread *thread = new_thread(vm.L, argv[i + 1], 0, &vm);
-		prepenv(thread->L);
+		prepenv(&vm, thread->L);
 		
 		switch(luaL_loadfile(thread->L, thread->filename)) {
 		case LUA_ERRSYNTAX:
@@ -325,10 +335,10 @@ main(int argc, const char *argv[])
 Thread *
 get_thread(lua_State *L)
 {
-	lua_pushlightuserdata(L, L); /* push pointer to thread state */
-	lua_gettable(L, LUA_REGISTRYINDEX); /* gets registry[thread state] (pops thread state ptr and pushes ThreadPtr) */
+	lua_pushlightuserdata(L, L);
+	lua_gettable(L, LUA_REGISTRYINDEX);
 	Thread *thread = lua_touserdata(L, -1);
-	lua_pop(L, 1); /* pops ThreadPtr */
+	lua_pop(L, 1);
 	return thread;
 }
 

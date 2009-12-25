@@ -10,6 +10,6 @@ end
 
 print("about to fork");
 fork(tofork);
-fork(tofork2, 3, 6, 9);
 fork_eval("print('that totally worked');");
+fork(tofork2, 3, 6, 9);
 print("forked");
