@@ -2,7 +2,7 @@ SinOsc = {
 	new = function(class)
 		return UGen.initialize_io({
 			phase = 0.0,
-			freq = 1.0,
+			freq = 440.0,
 			last_value = 0.0,
 			tick = function(self)
 				if not (now() == self.last_tick) then
