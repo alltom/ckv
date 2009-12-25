@@ -46,7 +46,7 @@ static int ckv_ugen_sum_inputs(lua_State *L) {
 	lua_getfield(L, -1, port); /* pushes self.inputs[port] */
 	
 	double sample = 0;
-
+	
 	/* enumerate the inputs */
 	lua_pushnil(L); /* first key */
 	while(lua_next(L, -2) != 0) {
