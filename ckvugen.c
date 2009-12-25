@@ -155,6 +155,10 @@ static int ckv_gain_new(lua_State *L) {
 	lua_pushnumber(L, gain);
 	lua_setfield(L, -2, "gain");
 	
+	/* self.last_tick = -1 */
+	lua_pushnumber(L, -1);
+	lua_setfield(L, -2, "last_tick");
+	
 	/* add gain methods */
 	luaL_register(L, NULL, ckvugen_gain);
 	
