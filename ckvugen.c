@@ -160,5 +160,13 @@ int open_ckvugen(lua_State *L) {
 	lua_pushcfunction(L, ckv_disconnect); lua_setfield(L, -2, "disconnect");
 	lua_pop(L, 1);
 	
+	/* dac */
+	lua_getglobal(L, "Gain");
+	lua_getfield(L, -1, "new");
+	lua_pushvalue(L, -2); /* push Gain again (argument to new) */
+	lua_call(L, 1, 1);
+	lua_setglobal(L, "dac");
+	lua_pop(L, 1); /* pop Gain */
+	
 	return 1; /* return globals */
 }
