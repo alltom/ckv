@@ -1,18 +1,3 @@
-Gain = {
-	new = function(class, gain)
-		return UGen.initialize_io({
-			gain = gain or 1.0,
-			tick = function(self)
-				if not(now() == self.last_tick) then
-					self.last_value = self.gain * UGen.sum_inputs(self, "default");
-					self.last_tick = now();
-				end
-				return self.last_value;
-			end,
-		})
-	end
-};
-
 SinOsc = {
 	new = function(class)
 		return UGen.initialize_io({
@@ -32,10 +17,9 @@ SinOsc = {
 };
 
 s = SinOsc:new();
-g = Gain:new();
-connect(s, g);
+connect(s, dac);
 for i = 1, 10, 1 do
-	print("ugens:", g:tick(), s:tick());
+	print("ugens:", dac:tick(), s:tick());
 	yield(1);
 end
 
