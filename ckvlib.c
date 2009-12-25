@@ -49,6 +49,7 @@ static int ckv_print(lua_State *L) {
 		lua_pop(L, 1);  /* pop result */
 	}
 	fputs("\n", stdout);
+	fflush(stdout);
 	return 0;
 }
 
