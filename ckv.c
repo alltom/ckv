@@ -26,6 +26,7 @@ typedef struct VM {
 	Thread *current_thread;
 	lua_State *L; /* global global state */
 	double now;
+	int stopped;
 	
 	unsigned int audio_now; /* used in audio callback; unused in silent mode */
 	int sample_rate;
@@ -40,6 +41,7 @@ int
 init_vm(VM *vm, int all_libs)
 {
 	vm->now = 0;
+	vm->stopped = 0;
 	
 	vm->audio_now = 0;
 	vm->sample_rate = 44100;
@@ -299,6 +301,9 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 				run_one(thread);
 			}
 			
+			if(vm->queue.count == 0)
+				vm->stopped = 1;
+			
 			vm->now = vm->audio_now;
 		}
 		
@@ -351,6 +356,9 @@ main(int argc, const char *argv[])
 		}
 	}
 	
+	if(next_thread(&vm.queue) == NULL)
+		return num_scripts == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+	
 	if(silent_mode) {
 		
 		run(&vm);
@@ -362,7 +370,8 @@ main(int argc, const char *argv[])
 			return EXIT_FAILURE;
 		}
 		
-		sleep(20); /* TODO: please fix this HACK */
+		while(!vm.stopped)
+			sleep(1); /* TODO: please fix this HACK */
 		
 		stop_audio();
 		
