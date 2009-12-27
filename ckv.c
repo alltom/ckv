@@ -323,11 +323,23 @@ int
 main(int argc, const char *argv[])
 {
 	VM vm;
-	int num_scripts = argc - 1;
-	int i;
+	int i, c;
+	int num_scripts;
 	
 	int silent_mode = 0; /* whether to execute without using the sound card */
 	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
+	
+	while((c = getopt(argc, (char ** const) argv, "sa")) != -1)
+		switch(c) {
+		case 's':
+			silent_mode = 1;
+			break;
+		case 'a':
+			all_libs = 1;
+			break;
+		}
+	
+	num_scripts = argc - optind;
 	
 	if(!init_vm(&vm, all_libs)) {
 		fprintf(stderr, "could not initialize VM\n");
@@ -336,8 +348,8 @@ main(int argc, const char *argv[])
 	
 	g_vm = &vm;
 	
-	for(i = 0; i < num_scripts; i++) {
-		Thread *thread = new_thread(vm.L, argv[i + 1], 0, &vm);
+	for(i = optind; i < argc; i++) {
+		Thread *thread = new_thread(vm.L, argv[i], 0, &vm);
 		prepenv(&vm, thread->L);
 		
 		switch(luaL_loadfile(thread->L, thread->filename)) {
