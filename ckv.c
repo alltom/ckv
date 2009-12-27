@@ -37,7 +37,7 @@ VM *g_vm; /* TODO: remove this HACK once again! */
 /* returns 0 on failure */
 static
 int
-init_vm(VM *vm)
+init_vm(VM *vm, int all_libs)
 {
 	vm->now = 0;
 	
@@ -70,6 +70,14 @@ init_vm(VM *vm)
 	
 	/* load all the libraries a thread could need */
 	lua_gc(vm->L, LUA_GCSTOP, 0); /* stop collector during initialization */
+	if(all_libs) {
+		lua_pushcfunction(vm->L, luaopen_base); lua_call(vm->L, 0, 0);
+		lua_pushcfunction(vm->L, luaopen_package); lua_call(vm->L, 0, 0);
+		lua_pushcfunction(vm->L, luaopen_io); lua_call(vm->L, 0, 0);
+		lua_pushcfunction(vm->L, luaopen_os); lua_call(vm->L, 0, 0);
+	} else {
+		lua_pushcfunction(vm->L, open_ckvbaselite); lua_call(vm->L, 0, 0);
+	}
 	lua_pushcfunction(vm->L, luaopen_string); lua_call(vm->L, 0, 0);
 	lua_pushcfunction(vm->L, luaopen_table); lua_call(vm->L, 0, 0);
 	lua_pushcfunction(vm->L, luaopen_math); lua_call(vm->L, 0, 0);
@@ -308,9 +316,11 @@ main(int argc, const char *argv[])
 	VM vm;
 	int num_scripts = argc - 1;
 	int i;
-	int silent_mode = 0;
 	
-	if(!init_vm(&vm)) {
+	int silent_mode = 0; /* whether to execute without using the sound card */
+	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
+	
+	if(!init_vm(&vm, all_libs)) {
 		fprintf(stderr, "could not initialize VM\n");
 		return EXIT_FAILURE;
 	}
@@ -348,7 +358,7 @@ main(int argc, const char *argv[])
 			return EXIT_FAILURE;
 		}
 		
-		sleep(20);
+		sleep(20); /* TODO: please fix this HACK */
 		
 		stop_audio();
 		

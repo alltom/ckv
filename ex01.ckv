@@ -1,3 +1,7 @@
+if os then
+	print("starting at", os.time());
+end
+
 SinOsc = {
 	new = function(class, freq)
 		return UGen.initialize_io({
