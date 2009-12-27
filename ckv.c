@@ -282,19 +282,12 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	
 	for(i = 0; i < nFrames; i++) {
 		if(vm->now < vm->audio_now) {
-			thread = next_thread(&vm->queue);
-			if(thread == NULL) {
-				vm->now = vm->audio_now;
-			} else {
+			while((thread = next_thread(&vm->queue)) != NULL && thread->now < vm->audio_now) {
 				vm->now = thread->now;
 				run_one(thread);
-				
-				thread = next_thread(&vm->queue);
-				if(thread == NULL)
-					vm->now = vm->audio_now;
-				else
-					vm->now = thread->now;
 			}
+			
+			vm->now = vm->audio_now;
 		}
 		
 		lua_getglobal(vm->L, "dac");

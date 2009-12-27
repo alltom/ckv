@@ -1,3 +1,5 @@
+print("go");
+
 SinOsc = {
 	new = function(class, freq)
 		return UGen.initialize_io({
@@ -16,25 +18,11 @@ SinOsc = {
 	end
 };
 
-howmany = 10;
+howmany = 5;
 
-g = Gain:new(1.0 / howmany);
-connect(g, dac);
+dac.gain = 1.0 / howmany;
 for i = 1, howmany, 1 do
-	connect(SinOsc:new(100 + i * 100), g)
+	print("connecting!", 100 + i * 100);
+	connect(SinOsc:new(100 + i * 100), dac);
+	yield(44100);
 end
-
-function crazytown(n)
-	print("forked threads say", n);
-	yield(100);
-	print("forked threads also say pie!");
-end
-fork(crazytown, 10);
-fork_eval("print('this was eval\\'d!')");
-
-print("global BAR is:", global.BAR);
-global.BAR = "frank sinatra";
-
-yield(100);
-
-print("done at:", now());
