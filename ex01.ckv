@@ -2,27 +2,27 @@ if os then
 	print("starting at", os.time());
 end
 
-SinOsc = {
-	new = function(class, freq)
-		return UGen.initialize_io({
-			phase = 0.0,
-			freq = freq or 440.0,
-			last_value = 0.0,
-			tick = function(self)
-				if not (now() == self.last_tick) then
-					self.last_value = math.sin(self.phase * math.pi * 2.0);
-					self.phase = (self.phase + self.freq / 44100.0) % 1.0;
-					self.last_tick = now();
-				end
-				return self.last_value;
-			end,
-		})
-	end
-};
+-- SinOsc = {
+-- 	new = function(class, freq)
+-- 		return UGen.initialize_io({
+-- 			phase = 0.0,
+-- 			freq = freq or 440.0,
+-- 			last_value = 0.0,
+-- 			tick = function(self)
+-- 				if not (now() == self.last_tick) then
+-- 					self.last_value = math.sin(self.phase * math.pi * 2.0);
+-- 					self.phase = (self.phase + self.freq / 44100.0) % 1.0;
+-- 					self.last_tick = now();
+-- 				end
+-- 				return self.last_value;
+-- 			end,
+-- 		})
+-- 	end
+-- };
 
-for i = 1, 20, 1 do
+for i = 1, 50, 1 do
 	print("connecting!", i, 100 + i * 100);
 	connect(SinOsc:new(100 + i * 100), dac);
 	dac.gain = 1.0 / i;
-	yield(44100);
+	yield(44100 / 4);
 end
