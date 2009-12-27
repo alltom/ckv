@@ -68,6 +68,10 @@ init_vm(VM *vm, int all_libs)
 	lua_newtable(vm->L);
 	lua_rawset(vm->L, LUA_REGISTRYINDEX);
 	
+	/* set the sample rate */
+	lua_pushnumber(vm->L, vm->sample_rate);
+	lua_setglobal(vm->L, "sample_rate");
+	
 	/* load all the libraries a thread could need */
 	lua_gc(vm->L, LUA_GCSTOP, 0); /* stop collector during initialization */
 	if(all_libs) {
@@ -353,7 +357,7 @@ main(int argc, const char *argv[])
 		
 	} else {
 		
-		if(!start_audio(render_audio, &vm)) {
+		if(!start_audio(render_audio, vm.sample_rate, &vm)) {
 			fprintf(stderr, "could not start audio\n");
 			return EXIT_FAILURE;
 		}

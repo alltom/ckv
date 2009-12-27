@@ -184,7 +184,7 @@ static int ckv_gain_new(lua_State *L) {
 static int ckv_sinosc_tick(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
 	
-	lua_Number phase, freq, last_tick, last_value;
+	lua_Number phase, freq, sample_rate, last_tick, last_value;
 	
 	lua_getfield(L, -1, "last_tick");
 	last_tick = lua_tonumber(L, -1);
@@ -200,11 +200,15 @@ static int ckv_sinosc_tick(lua_State *L) {
 		freq = lua_tonumber(L, -1);
 		lua_pop(L, 1);
 		
+		lua_getglobal(L, "sample_rate");
+		sample_rate = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+		
 		lua_pushnumber(L, tnow);
 		lua_setfield(L, 1, "last_tick");
 		
 		last_value = sin(phase * M_PI * 2.0);
-		phase += freq / 44100.0;
+		phase += freq / sample_rate;
 		while(phase < 0) phase += 1;
 		while(phase > 1) phase -= 1;
 		

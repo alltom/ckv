@@ -25,7 +25,7 @@ extern "C" {
 
 /* returns 0 on failure */
 int
-start_audio(AudioCallback _callback, void *data)
+start_audio(AudioCallback _callback, int sample_rate, void *data)
 {
 	if(dac.getDeviceCount() < 1) {
 		std::cout << "No audio devices found!\n";
@@ -36,13 +36,12 @@ start_audio(AudioCallback _callback, void *data)
 	parameters.deviceId = dac.getDefaultOutputDevice();
 	parameters.nChannels = 2;
 	parameters.firstChannel = 0;
-	unsigned int sampleRate = 44100;
 	unsigned int bufferFrames = 256;
 	
 	callback = _callback;
 	
 	try {
-		dac.openStream(&parameters, NULL, RTAUDIO_FLOAT64, sampleRate, &bufferFrames, &render, data);
+		dac.openStream(&parameters, NULL, RTAUDIO_FLOAT64, sample_rate, &bufferFrames, &render, data);
 		dac.startStream();
 	} catch(RtError& e) {
 		e.printMessage();
