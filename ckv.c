@@ -1,5 +1,6 @@
 
 #include "ckv.h"
+#include "pq.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,13 +17,8 @@ typedef struct Thread {
 	VMPtr vm;
 } Thread;
 
-typedef struct {
-	int count, capacity;
-	Thread **threads;
-} ThreadQueue;
-
 typedef struct VM {
-	ThreadQueue queue;
+	PQ queue;
 	Thread *current_thread;
 	lua_State *L; /* global global state */
 	double now;
@@ -53,10 +49,8 @@ init_vm(VM *vm, int all_libs)
 		return 0;
 	}
 	
-	vm->queue.count = 0;
-	vm->queue.capacity = 10;
-	vm->queue.threads = malloc(sizeof(Thread) * vm->queue.capacity);
-	if(!vm->queue.threads) {
+	vm->queue = new_queue(1);
+	if(!vm->queue) {
 		lua_close(vm->L);
 		return 0;
 	}
@@ -99,7 +93,7 @@ void
 close_vm(VM *vm)
 {
 	/* TODO: free threads */
-	free(vm->queue.threads);
+	free(vm->queue);
 	lua_close(vm->L);
 }
 
@@ -192,56 +186,21 @@ static
 int
 schedule_thread(VM *vm, Thread *thread)
 {
-	if(vm->queue.count == vm->queue.capacity) {
-		fprintf(stderr, "resizing thread queue\n");
-		Thread **new_thread_array = realloc(vm->queue.threads, vm->queue.capacity * 2 * sizeof(Thread));
-		if(new_thread_array == NULL) {
-			fprintf(stderr, "could not resize thread queue\n");
-			return 0;
-		}
-		
-		vm->queue.threads = new_thread_array;
-	}
-	
-	vm->queue.threads[vm->queue.count++] = thread;
-	return 1;
+	return queue_insert(vm->queue, thread->now, thread);
 }
 
 static
 Thread *
-next_thread(ThreadQueue *queue)
+next_thread(PQ queue)
 {
-	double min_now;
-	int i, min_thread;
-	
-	if(queue->count == 0)
-		return NULL;
-	
-	min_now = queue->threads[0]->now;
-	min_thread = 0;
-	for(i = 1; i < queue->count; i++) {
-		if(queue->threads[i]->now < min_now) {
-			min_now = queue->threads[i]->now;
-			min_thread = i;
-		}
-	}
-	
-	return queue->threads[min_thread];
+	return queue_min(queue);
 }
 
 static
 void
 unschedule_thread(VM *vm, Thread *thread)
 {
-	int i;
-	for(i = 0; i < vm->queue.count; i++) {
-		if(vm->queue.threads[i] == thread) {
-			for(; i < vm->queue.count - 1; i++)
-				vm->queue.threads[i] = vm->queue.threads[i+1];
-			vm->queue.count--;
-			return;
-		}
-	}
+	remove_queue_items(vm->queue, thread);
 }
 
 static
@@ -279,7 +238,7 @@ void
 run(VM *vm)
 {
 	Thread *thread;
-	while((thread = next_thread(&vm->queue)) != NULL) {
+	while((thread = next_thread(vm->queue)) != NULL) {
 		vm->now = thread->now;
 		run_one(thread);
 	}
@@ -296,12 +255,12 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	
 	for(i = 0; i < nFrames; i++) {
 		if(vm->now < vm->audio_now) {
-			while((thread = next_thread(&vm->queue)) != NULL && thread->now < vm->audio_now) {
+			while((thread = next_thread(vm->queue)) != NULL && thread->now < vm->audio_now) {
 				vm->now = thread->now;
 				run_one(thread);
 			}
 			
-			if(vm->queue.count == 0)
+			if(queue_empty(vm->queue))
 				vm->stopped = 1;
 			
 			vm->now = vm->audio_now;
@@ -368,7 +327,7 @@ main(int argc, const char *argv[])
 		}
 	}
 	
-	if(next_thread(&vm.queue) == NULL)
+	if(next_thread(vm.queue) == NULL)
 		return num_scripts == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 	
 	if(silent_mode) {
