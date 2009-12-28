@@ -1,0 +1,9 @@
+
+-- try it: ckv ex03.ckv ex03a.ckv ex03b.ckv
+
+global.fun_time = Event:new();
+
+while true do
+	global.fun_time:broadcast();
+	yield(sample_rate * 2);
+end

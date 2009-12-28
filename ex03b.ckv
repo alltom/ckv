@@ -1,0 +1,14 @@
+
+s = SinOsc:new();
+
+while yield(global.fun_time) do
+	connect(s, dac);
+	
+	s.freq = 440;
+	for i = 1, 50, 1 do
+		s.freq = s.freq * 1.01;
+		yield(sample_rate / 100.0);
+	end
+	
+	disconnect(s, dac);
+end

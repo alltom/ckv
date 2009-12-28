@@ -1,0 +1,4 @@
+
+while yield(global.fun_time) do
+	print("got the event!");
+end
