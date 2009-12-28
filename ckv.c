@@ -1,8 +1,7 @@
 
 /* TODO:
- * - user-created events (Event class)
  * - keep one thread from crashing the VM
- * - print errors with filename prefixes
+ * - random functions (rand, maybe, etc)
  */
 
 #include "ckv.h"
@@ -244,6 +243,9 @@ run_one(VM *vm)
 			
 			queue_insert(ev->waiting, ev->next_pri++, thread);
 			vm->num_sleeping_threads++;
+			
+			/* for when they resume */
+			lua_pushvalue(thread->L, 1);
 		} else {
 			/* yield some samples */
 			
@@ -252,6 +254,9 @@ run_one(VM *vm)
 				thread->now += amount;
 			
 			queue_insert(vm->queue, thread->now, thread);
+			
+			/* for when they resume */
+			lua_pushvalue(thread->L, 1);
 		}
 		
 		break;
@@ -480,6 +485,7 @@ ckv_event_broadcast(lua_State *L)
 		Thread *thread = remove_queue_min(ev->waiting);
 		thread->now = now;
 		queue_insert(thread->vm->queue, thread->now, thread);
+		thread->vm->num_sleeping_threads--;
 	}
 	
 	return 0;
