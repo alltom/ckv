@@ -124,6 +124,12 @@ queue_empty(PQ q)
 	return q->count == 0;
 }
 
+int
+queue_count(PQ q)
+{
+	return q->count;
+}
+
 /* PRIVATE HELPERS */
 
 #define MORE(i, j) (q->items[j].floats || (q->items[i].priority > q->items[j].priority))

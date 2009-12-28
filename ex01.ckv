@@ -22,9 +22,21 @@ LuaSinOsc = {
 	end
 };
 
+ev = Event:new();
+
+fork(function()
+	local count = 0;
+	while true do
+		yield(ev);
+		count = count + 1
+		print(count, "sines");
+		
+		connect(SinOsc:new(100 + count * 100), dac);
+		dac.gain = 1.0 / count;
+	end
+end)
+
 for i = 1, 50, 1 do
-	print("connecting!", i, 100 + i * 100);
-	connect(SinOsc:new(100 + i * 100), dac);
-	dac.gain = 1.0 / i;
 	yield(sample_rate / 4);
+	ev:broadcast();
 end

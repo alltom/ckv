@@ -1,4 +1,10 @@
 
+/* TODO:
+ * - user-created events (Event class)
+ * - keep one thread from crashing the VM
+ * - print errors with filename prefixes
+ */
+
 #include "ckv.h"
 #include "pq.h"
 
@@ -10,6 +16,11 @@
 #define GLOBAL_NAMESPACE "global"
 #define THREADS_TABLE "threads"
 
+typedef struct Event {
+	PQ waiting;
+	unsigned long int next_pri;
+} Event;
+
 typedef struct Thread {
 	const char *filename;
 	lua_State *L;
@@ -19,7 +30,7 @@ typedef struct Thread {
 
 typedef struct VM {
 	PQ queue;
-	Thread *current_thread;
+	int num_sleeping_threads;
 	lua_State *L; /* global global state */
 	double now;
 	int stopped;
@@ -31,6 +42,23 @@ typedef struct VM {
 
 VM *g_vm; /* TODO: remove this HACK once again! */
 
+static int ckv_event_new(lua_State *L);
+static int open_ckv(lua_State *L);
+
+static
+void
+print_warning(lua_State *L, const char *fmt, ...)
+{
+	va_list argp;
+	va_start(argp, fmt);
+	luaL_where(L, 1);
+	lua_pushvfstring(L, fmt, argp);
+	va_end(argp);
+	lua_concat(L, 2);
+	fprintf(stderr, "[ckv] %s\n", lua_tostring(L, -1));
+	lua_pop(L, 1);
+}
+
 /* returns 0 on failure */
 static
 int
@@ -38,6 +66,7 @@ init_vm(VM *vm, int all_libs)
 {
 	vm->now = 0;
 	vm->stopped = 0;
+	vm->num_sleeping_threads = 0;
 	
 	vm->audio_now = 0;
 	vm->sample_rate = 44100;
@@ -45,7 +74,7 @@ init_vm(VM *vm, int all_libs)
 	
 	vm->L = luaL_newstate();
 	if(vm->L == NULL) {
-		fprintf(stderr, "cannot init lua\n");
+		fprintf(stderr, "[ckv] cannot init lua\n");
 		return 0;
 	}
 	
@@ -92,6 +121,7 @@ static
 void
 close_vm(VM *vm)
 {
+	/* TODO: free events */
 	/* TODO: free threads */
 	free(vm->queue);
 	lua_close(vm->L);
@@ -181,53 +211,57 @@ prepenv(VM *vm, lua_State *L)
 	}
 }
 
-/* returns 0 on failure */
-static
-int
-schedule_thread(VM *vm, Thread *thread)
-{
-	return queue_insert(vm->queue, thread->now, thread);
-}
-
-static
-Thread *
-next_thread(PQ queue)
-{
-	return queue_min(queue);
-}
-
 static
 void
-unschedule_thread(VM *vm, Thread *thread)
+run_one(VM *vm)
 {
-	remove_queue_items(vm->queue, thread);
-}
-
-static
-void
-run_one(Thread *thread)
-{
-	VM *vm = thread->vm;
+	Thread *thread = remove_queue_min(vm->queue);
+	
+	if(thread == NULL)
+		return;
+	
+	vm->now = thread->now;
 	
 	switch(lua_resume(thread->L, lua_gettop(thread->L) - 1)) {
 	case 0:
-		unschedule_thread(vm, thread);
 		unregister_thread(vm, thread);
 		break;
 	case LUA_YIELD: {
-		lua_Number amount = luaL_checknumber(thread->L, -1);
-		if(amount > 0)
-			thread->now += amount;
+		if(lua_type(thread->L, 1) == LUA_TNIL) {
+			print_warning(thread->L, "attempted to yield nil");
+		} else if(lua_type(thread->L, 1) == LUA_TTABLE) {
+			/* sleep on an event */
+			
+			lua_pushstring(thread->L, "obj");
+			lua_rawget(thread->L, 1);
+			Event *ev = lua_touserdata(thread->L, -1);
+			lua_pop(thread->L, 1);
+			
+			if(ev == NULL) {
+				print_warning(thread->L, "attempted to yield something not an event or duration");
+				break;
+			}
+			
+			queue_insert(ev->waiting, ev->next_pri++, thread);
+			vm->num_sleeping_threads++;
+		} else {
+			/* yield some samples */
+			
+			lua_Number amount = luaL_checknumber(thread->L, -1);
+			if(amount > 0)
+				thread->now += amount;
+			
+			queue_insert(vm->queue, thread->now, thread);
+		}
+		
 		break;
 	}
 	case LUA_ERRRUN:
-		fprintf(stderr, "runtime error: %s\n", lua_tostring(thread->L, -1));
-		unschedule_thread(vm, thread);
+		print_warning(thread->L, "runtime error: %s", lua_tostring(thread->L, -1));
 		unregister_thread(vm, thread);
 		break;
 	case LUA_ERRMEM:
-		fprintf(stderr, "memory allocation error while running '%s'\n", thread->filename);
-		unschedule_thread(vm, thread);
+		print_warning(thread->L, "memory allocation error");
 		unregister_thread(vm, thread);
 		break;
 	}
@@ -237,11 +271,9 @@ static
 void
 run(VM *vm)
 {
-	Thread *thread;
-	while((thread = next_thread(vm->queue)) != NULL) {
-		vm->now = thread->now;
-		run_one(thread);
-	}
+	/* note: will exit when all threads have died OR are asleep */
+	while(!queue_empty(vm->queue))
+		run_one(vm);
 }
 
 static
@@ -250,18 +282,19 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
              double streamTime, void *userData)
 {
 	VM *vm = (VM *)userData;
-	Thread *thread;
 	unsigned int i;
 	
 	for(i = 0; i < nFrames; i++) {
 		if(vm->now < vm->audio_now) {
-			while((thread = next_thread(vm->queue)) != NULL && thread->now < vm->audio_now) {
-				vm->now = thread->now;
-				run_one(thread);
-			}
+			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now)
+				run_one(vm);
 			
-			if(queue_empty(vm->queue))
+			if(queue_empty(vm->queue) && vm->num_sleeping_threads == 0) {
 				vm->stopped = 1;
+				/* TODO: if we finish this buffer, UGens will be
+				         asked for samples past the point where all
+				         threads have died. This might not be okay. */
+			}
 			
 			vm->now = vm->audio_now;
 		}
@@ -301,7 +334,7 @@ main(int argc, const char *argv[])
 	num_scripts = argc - optind;
 	
 	if(!init_vm(&vm, all_libs)) {
-		fprintf(stderr, "could not initialize VM\n");
+		fprintf(stderr, "[ckv] could not initialize VM\n");
 		return EXIT_FAILURE;
 	}
 	
@@ -313,21 +346,21 @@ main(int argc, const char *argv[])
 		
 		switch(luaL_loadfile(thread->L, thread->filename)) {
 		case LUA_ERRSYNTAX:
-			fprintf(stderr, "syntax error: %s\n", lua_tostring(thread->L, -1));
+			fprintf(stderr, "[ckv] %s\n", lua_tostring(thread->L, -1));
 			break;
 		case LUA_ERRMEM:
-			fprintf(stderr, "memory allocation error while loading '%s'\n", thread->filename);
+			fprintf(stderr, "[ckv] %s: memory allocation error while loading script\n", thread->filename);
 			break;
 		case LUA_ERRFILE:
-			fprintf(stderr, "cannot open script '%s'\n", thread->filename);
+			fprintf(stderr, "[ckv] %s: cannot open file\n", thread->filename);
 			break;
 		default:
-			if(!schedule_thread(&vm, thread))
-				fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);
+			if(!queue_insert(vm.queue, 0, thread))
+				fprintf(stderr, "[ckv] %s: could not add to thread queue\n", thread->filename);
 		}
 	}
 	
-	if(next_thread(vm.queue) == NULL)
+	if(queue_empty(vm.queue))
 		return num_scripts == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 	
 	if(silent_mode) {
@@ -337,7 +370,7 @@ main(int argc, const char *argv[])
 	} else {
 		
 		if(!start_audio(render_audio, vm.sample_rate, &vm)) {
-			fprintf(stderr, "could not start audio\n");
+			fprintf(stderr, "[ckv] could not start audio\n");
 			return EXIT_FAILURE;
 		}
 		
@@ -355,6 +388,7 @@ main(int argc, const char *argv[])
 
 /* non-static functions mostly for calling from ckvlib */
 
+static
 Thread *
 get_thread(lua_State *L)
 {
@@ -365,51 +399,139 @@ get_thread(lua_State *L)
 	return thread;
 }
 
-double
-now(Thread *thread)
+/* TODO: make this a Lua variable instead of a function */
+static
+int
+ckv_now(lua_State *L)
 {
-	if(thread)
-		return thread->now;
-	else
-		return g_vm->now;
+	lua_pushnumber(L, g_vm->now);
+	return 1;
 }
 
-void
-fork_child(Thread *parent)
+static
+int
+ckv_fork(lua_State *L)
 {
+	Thread *parent = get_thread(L); /* TODO: what if a UGen forks? */
+	
 	Thread *thread = new_thread(parent->L, "", parent->now, parent->vm);
 	if(!thread) {
-		fprintf(stderr, "could not allocate thread for child thread of '%s'\n", parent->filename);
-		return;
+		print_warning(parent->L, "could not allocate child thread");
+		return 0;
 	}
 	
 	lua_xmove(parent->L, thread->L, lua_gettop(parent->L)); /* move function and args over */
 	
-	if(!schedule_thread(parent->vm, thread))
-		fprintf(stderr, "could not add '%s' to thread queue\n", thread->filename);
+	if(!queue_insert(parent->vm->queue, thread->now, thread))
+		print_warning(parent->L, "could not enqueue child thread");
+	
+	return 0;
 }
 
-void
-fork_child_with_eval(Thread *parent)
+static
+int
+ckv_fork_eval(lua_State *L)
 {
+	Thread *parent = get_thread(L); /* TODO: what if a UGen forks? */
 	const char *code = luaL_checkstring(parent->L, -1);
+	
 	Thread *thread = new_thread(parent->L, "", parent->now, parent->vm);
 	if(!thread) {
-		fprintf(stderr, "could not allocate thread for child thread of '%s'\n", parent->filename);
-		return;
+		print_warning(parent->L, "could not allocate child thread");
+		return 0;
 	}
 	
 	switch(luaL_loadstring(thread->L, code)) {
 	case LUA_ERRSYNTAX:
-		fprintf(stderr, "could not create thread: syntax error: %s\n", lua_tostring(thread->L, -1));
+		print_warning(parent->L, "could not create thread: %s", lua_tostring(thread->L, -1));
 		free(thread);
 		break;
 	case LUA_ERRMEM:
-		fprintf(stderr, "could not create thread: memory allocation error\n");
+		print_warning(parent->L, "could not create thread: memory allocation error");
 		free(thread);
 		break;
 	default:
-		if(!schedule_thread(parent->vm, thread))
-			fprintf(stderr, "could not add to thread queue\n");
+		if(!queue_insert(parent->vm->queue, thread->now, thread))
+			print_warning(parent->L, "could not enqueue child thread");
 	}
+	
+	return 0;
+}
+
+static
+int
+ckv_yield(lua_State *L)
+{
+	return lua_yield(L, lua_gettop(L));
+}
+
+static
+int
+ckv_event_broadcast(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE); /* event */
+	double now = get_thread(L)->vm->now; /* TODO: what if a UGen broadcasts? */
+	
+	lua_getfield(L, 1, "obj");
+	Event *ev = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	
+	while(!queue_empty(ev->waiting)) {
+		Thread *thread = remove_queue_min(ev->waiting);
+		thread->now = now;
+		queue_insert(thread->vm->queue, thread->now, thread);
+	}
+	
+	return 0;
+}
+
+static
+int
+ckv_event_new(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE); /* Event */
+	
+	Event *ev = malloc(sizeof(Event));
+	if(ev == NULL) {
+		lua_pushnil(L);
+		return 1;
+	}
+	
+	ev->waiting = new_queue(1);
+	if(ev->waiting == NULL) {
+		free(ev);
+		lua_pushnil(L);
+		return 1;
+	}
+	
+	ev->next_pri = 0;
+	
+	/* our new_event object */
+	lua_createtable(L, 0 /* array items */, 1 /* non-array items */);
+	
+	lua_pushstring(L, "obj");
+	lua_pushlightuserdata(L, ev);
+	lua_rawset(L, -3);
+	
+	lua_pushcfunction(L, ckv_event_broadcast);
+	lua_setfield(L, -2, "broadcast");
+	
+	return 1;
+}
+
+/* opens ckv functions */
+static
+int
+open_ckv(lua_State *L) {
+	lua_register(L, "now", ckv_now);
+	lua_register(L, "fork", ckv_fork);
+	lua_register(L, "fork_eval", ckv_fork_eval);
+	lua_register(L, "yield", ckv_yield);
+	
+	/* Event */
+	lua_createtable(L, 0 /* array items */, 1 /* non-array items */);
+	lua_pushcfunction(L, ckv_event_new); lua_setfield(L, -2, "new");
+	lua_setglobal(L, "Event"); /* pops */
+	
+	return 1;
 }

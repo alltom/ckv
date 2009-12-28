@@ -113,7 +113,11 @@ static int ckv_gain_tick(lua_State *L) {
 	last_tick = lua_tonumber(L, -1);
 	lua_pop(L, 1);
 	
-	double tnow = now(get_thread(L));
+	lua_getglobal(L, "now");
+	lua_call(L, 0, 1);
+	double tnow = lua_tonumber(L, -1);
+	lua_pop(L, 1);
+	
 	if(tnow > last_tick) {
 		lua_getfield(L, -1, "gain");
 		gain = lua_tonumber(L, -1);
@@ -190,7 +194,11 @@ static int ckv_sinosc_tick(lua_State *L) {
 	last_tick = lua_tonumber(L, -1);
 	lua_pop(L, 1);
 	
-	double tnow = now(get_thread(L));
+	lua_getglobal(L, "now");
+	lua_call(L, 0, 1);
+	double tnow = lua_tonumber(L, -1);
+	lua_pop(L, 1);
+	
 	if(tnow > last_tick) {
 		lua_getfield(L, -1, "phase");
 		phase = lua_tonumber(L, -1);

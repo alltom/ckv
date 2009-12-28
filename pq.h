@@ -12,5 +12,6 @@ void *queue_min(PQ q);
 void *remove_queue_min(PQ q);
 void remove_queue_items(PQ q, void *data); /* removes all entries with this data */
 int queue_empty(PQ q);
+int queue_count(PQ q);
 
 #endif
