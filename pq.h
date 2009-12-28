@@ -2,6 +2,7 @@
 #ifndef PQ_H
 #define PQ_H
 
+/* a minimum priority queue */
 typedef struct PQ *PQ;
 
 PQ new_queue(int capacity);
