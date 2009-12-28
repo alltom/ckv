@@ -96,7 +96,7 @@ static int ckv_disconnect(lua_State *L) {
 	lua_getfield(L, -1, port == NULL ? "default" : port);
 	lua_pushvalue(L, 1); /* source */
 	lua_pushnil(L);
-	lua_settable(L, -2);
+	lua_settable(L, -3);
 	
 	return 0;
 }
