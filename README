@@ -74,7 +74,8 @@ while true do
 end
 
 -- what's missing:
---  audio filters
---  mic in
+--  audio filters (make some!)
+--  multi-channel audio
+--  mic in (this will be easy to add)
 --  wav in/out (you could make your own, see the -a option)
 --  other stuff
