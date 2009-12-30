@@ -1,15 +1,80 @@
+--
+--    ckv
+--
+--  an audio language based on Lua
+--
+--
+-- INSTALL:
+-- 
+--   Dependencies:
+--    LUA: download, build, and "make install"
+--      http://www.lua.org/
+-- 
+--    RTAUDIO: download, build, then
+--             copy librtaudio.a to /usr/local/lib/
+--                  RtAudio.h    to /usr/local/include/
+--                  RtError.h    to /usr/local/include/
+--      http://www.music.mcgill.ca/~gary/rtaudio/
+-- 
+--   ckv:
+--     $ make
 
-...
-My brain's dead weight.
-I'm trying to get my head straight,
-but I can't figure out which language to implementate.
-And Ge Wang said,
-"Tom Lieber, you a paste-head."
-"Nuh uh!"
-"Then just use mine instead.
-Man, you crazay."
+-- EXECUTABLE SUMMARY (run this file)
 
-Well since age 12
-I've thought ChucK was something else
-...
+-- create unit generators in ckv!
+-- OOP in Lua is kind of weird, but simple:
+--   http://lua-users.org/wiki/ObjectOrientedProgramming
+Noise = {
+  new = function(class, gain)
+    return UGen.initialize_io({
+      gain = gain or 1.0,
+      last_value = 0.0,
+      tick = function(self)
+        if not(now() == self.last_tick) then
+          self.last_value = (math.random() * 2.0 - 1.0) * self.gain;
+          self.last_tick = now();
+        end
+        return self.last_value
+      end
+    })
+  end
+}
 
+ev = Event:new();
+
+function waiter1(name)
+  while yield(ev) do
+    print("take that, " .. name .. string.rep("!", math.random(1, 10)))
+  end
+end
+
+-- fork(function, arg1, arg2, ...)
+fork(waiter1, "user");
+
+-- Lua allows anonymous functions
+fork(function()
+  while yield(ev) do
+    local ugens = { "Noise:new()", "SinOsc:new()" };
+    local which = ugens[math.random(1, 2)];
+    
+    -- fork_eval(str) executes a string as Lua code!
+    fork_eval("local n = " .. which .. ";"
+           .. "connect(n, dac);"
+           .. "yield(sample_rate / 2);"
+           .. "disconnect(n, dac);");
+  end
+end)
+
+global.nb = "to share between script files, put stuff in global!";
+print(global.nb .. " and try \"ckv -h\" sometime!");
+
+while true do
+  yield(math.random() * sample_rate * 4 + 1);
+  ev:broadcast();
+end
+
+-- what's missing:
+--  audio filters
+--  mic in
+--  wav in/out (you could make your own, see the -a option)
+--  other stuff
