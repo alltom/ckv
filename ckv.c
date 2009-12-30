@@ -46,6 +46,16 @@ static int open_ckv(lua_State *L);
 
 static
 void
+usage(void)
+{
+	printf("[ckv] Usage information:\n");
+	printf("[ckv]   -h print this usage information\n");
+	printf("[ckv]   -a load all Lua libraries (enough to shoot yourself in the foot), including file IO\n");
+	printf("[ckv]   -s silent mode (no audio processing)\n");
+}
+
+static
+void
 print_warning(lua_State *L, const char *fmt, ...)
 {
 	va_list argp;
@@ -326,8 +336,11 @@ main(int argc, const char *argv[])
 	int silent_mode = 0; /* whether to execute without using the sound card */
 	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
 	
-	while((c = getopt(argc, (char ** const) argv, "sa")) != -1)
+	while((c = getopt(argc, (char ** const) argv, "hsa")) != -1)
 		switch(c) {
+		case 'h':
+			usage();
+			return EXIT_SUCCESS;
 		case 's':
 			silent_mode = 1;
 			break;
