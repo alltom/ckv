@@ -48,10 +48,10 @@ static
 void
 usage(void)
 {
-	printf("[ckv] Usage information:\n");
-	printf("[ckv]   -h print this usage information\n");
-	printf("[ckv]   -a load all Lua libraries (enough to shoot yourself in the foot), including file IO\n");
-	printf("[ckv]   -s silent mode (no audio processing)\n");
+	printf("usage: ckv [-has] [file ...]\n");
+	printf("  -h print this usage information\n");
+	printf("  -a load all Lua libraries (enough to shoot yourself in the foot), including file IO\n");
+	printf("  -s silent mode (no audio processing, non-real-time)\n");
 }
 
 static
