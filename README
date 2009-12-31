@@ -4,6 +4,12 @@
 --  an audio language based on Lua,
 --       inspired by ChucK
 --
+--      http://ckvlang.org/
+--
+--   Primary Author:
+--      Tom Lieber tom@alltom.com
+--
+--
 -- INSTALL:
 -- 
 --   Dependencies:
