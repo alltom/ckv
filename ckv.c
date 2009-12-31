@@ -114,7 +114,7 @@ init_vm(VM *vm, int all_libs)
 		lua_pushcfunction(vm->L, luaopen_io); lua_call(vm->L, 0, 0);
 		lua_pushcfunction(vm->L, luaopen_os); lua_call(vm->L, 0, 0);
 	} else {
-		lua_pushcfunction(vm->L, open_ckvbaselite); lua_call(vm->L, 0, 0);
+		lua_pushcfunction(vm->L, open_luabaselite); lua_call(vm->L, 0, 0);
 	}
 	lua_pushcfunction(vm->L, luaopen_string); lua_call(vm->L, 0, 0);
 	lua_pushcfunction(vm->L, luaopen_table); lua_call(vm->L, 0, 0);

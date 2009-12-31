@@ -9,7 +9,7 @@
 typedef struct VM *VMPtr;
 
 /* opens ckv-specific lua libraries */
-int open_ckvbaselite(lua_State *L);
+int open_luabaselite(lua_State *L);
 int open_ckvugen(lua_State *L);
 
 typedef void (*AudioCallback)(double *outputBuffer, double *inputBuffer,
