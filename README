@@ -9,6 +9,8 @@
 --   Dependencies:
 --    LUA: download, build, and "make install"
 --      http://www.lua.org/
+--    (or, on 32-bit systems, try LuaJIT for extra speed:
+--     http://luajit.org/luajit.html)
 -- 
 --    RTAUDIO: download, build, then
 --             copy librtaudio.a to /usr/local/lib/
@@ -81,11 +83,3 @@ while true do
   yield(math.random() * sample_rate * 4 + 1);
   ev:broadcast();
 end
-
--- what's missing:
---  audio filters (make some!)
---  multi-channel audio
---  mic in (this will be easy to add)
---  wav in/out (you could make your own, see the -a option)
---  LuaJIT would be incredible, but ckv and deps need to be 32-bit
---  other stuff
