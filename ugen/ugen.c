@@ -1,5 +1,5 @@
 
-#include "ckv.h"
+#include "../ckv.h"
 
 #include <math.h>
 
