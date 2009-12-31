@@ -541,5 +541,13 @@ open_ckv(lua_State *L) {
 	lua_pushcfunction(L, ckv_event_new); lua_setfield(L, -2, "new");
 	lua_setglobal(L, "Event"); /* pops */
 	
+	/* import math.random */
+	lua_getglobal(L, "math");
+	lua_getfield(L, 1, "random");
+	lua_setglobal(L, "random"); /* alias as random */
+	lua_getfield(L, 1, "random");
+	lua_setglobal(L, "rand"); /* alias as rand */
+	lua_pop(L, 1); /* pop math */
+	
 	return 1;
 }
