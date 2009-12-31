@@ -11,4 +11,4 @@ ckvaudio.o: ckvaudio.cpp
 	g++ $(CFLAGS) -c -o ckvaudio.o ckvaudio.cpp -D__MACOSX_CORE__
 
 clean:
-	rm -f *.o $(EXECUTABLE)
+	rm -f *.o */*.o $(EXECUTABLE)
