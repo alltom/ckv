@@ -1,8 +1,8 @@
 --
 --    ckv
 --
---  an audio language based on Lua
---
+--  an audio language based on Lua,
+--       inspired by ChucK
 --
 -- INSTALL:
 -- 
