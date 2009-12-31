@@ -120,6 +120,7 @@ int open_ckvugen(lua_State *L) {
 	/* UGens */
 	lua_pushcfunction(L, open_ugen_gain); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_sinosc); lua_call(L, 0, 0);
+	lua_pushcfunction(L, open_ugen_sndin); lua_call(L, 0, 0);
 	
 	/* dac */
 	lua_getglobal(L, "Gain");
