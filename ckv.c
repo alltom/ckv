@@ -534,6 +534,7 @@ open_ckv(lua_State *L) {
 	lua_register(L, "fork", ckv_fork);
 	lua_register(L, "fork_eval", ckv_fork_eval);
 	lua_register(L, "yield", ckv_yield);
+	lua_register(L, "sleep", ckv_yield);
 	
 	/* Event */
 	lua_createtable(L, 0 /* array items */, 1 /* non-array items */);
