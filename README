@@ -78,4 +78,5 @@ end
 --  multi-channel audio
 --  mic in (this will be easy to add)
 --  wav in/out (you could make your own, see the -a option)
+--  LuaJIT would be incredible, but ckv and deps need to be 32-bit
 --  other stuff
