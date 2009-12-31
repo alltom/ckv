@@ -2,6 +2,13 @@
 #include "../ckv.h"
 #include "ugen.h"
 
+/*
+TODO: convert Gain to Lua
+I created this unit generator in C to prove that it could
+be done. There's not much point since Lua's compiler probably
+produces better code, especially with LuaJIT.
+*/
+
 /* args: self */
 static
 int
