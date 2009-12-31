@@ -27,8 +27,7 @@
 --     $ ./ckv README
 --     $ ./ckv ex01.ckv
 --     $ ./ckv ex02.ckv
---     $ ./ckv ex03a.ckv
---     $ ./ckv ex03b.ckv
+--     $ ./ckv ex03a.ckv ex03b.ckv
 
 -- EXECUTABLE SUMMARY (run this file)
 
