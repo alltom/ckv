@@ -86,7 +86,7 @@ ckv_print(lua_State *L)
 			return luaL_error(L, LUA_QL("tostring") " must return a string to "
 			                     LUA_QL("print"));
 		if (i>1) fputs("\t", stdout);
-		fputs(s, stdout); /* TODO: make non-blocking if necessary */
+		fputs(s, stdout);
 		lua_pop(L, 1);  /* pop result */
 	}
 	fputs("\n", stdout);

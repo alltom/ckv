@@ -1,9 +1,4 @@
 
-/* TODO:
- * - keep one thread from crashing the VM
- * - random functions (rand, maybe, etc)
- */
-
 #include "ckv.h"
 #include "pq.h"
 
@@ -39,7 +34,7 @@ typedef struct VM {
 	int channels;
 } VM;
 
-VM *g_vm; /* TODO: remove this HACK once again! */
+VM *g_vm;
 
 static int ckv_event_new(lua_State *L);
 static int open_ckv(lua_State *L);
@@ -130,8 +125,6 @@ static
 void
 close_vm(VM *vm)
 {
-	/* TODO: free events */
-	/* TODO: free threads */
 	free(vm->queue);
 	lua_close(vm->L);
 }
@@ -304,12 +297,8 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now)
 				run_one(vm);
 			
-			if(queue_empty(vm->queue) && vm->num_sleeping_threads == 0) {
+			if(queue_empty(vm->queue) && vm->num_sleeping_threads == 0)
 				vm->stopped = 1;
-				/* TODO: if we finish this buffer, UGens will be
-				         asked for samples past the point where all
-				         threads have died. This might not be okay. */
-			}
 			
 			vm->now = vm->audio_now;
 		}
@@ -393,7 +382,7 @@ main(int argc, const char *argv[])
 		}
 		
 		while(!vm.stopped)
-			sleep(1); /* TODO: please fix this HACK */
+			sleep(1);
 		
 		stop_audio();
 		
@@ -417,7 +406,6 @@ get_thread(lua_State *L)
 	return thread;
 }
 
-/* TODO: make this a Lua variable instead of a function */
 static
 int
 ckv_now(lua_State *L)
@@ -430,7 +418,7 @@ static
 int
 ckv_fork(lua_State *L)
 {
-	Thread *parent = get_thread(L); /* TODO: what if a UGen forks? */
+	Thread *parent = get_thread(L);
 	
 	Thread *thread = new_thread(parent->L, "", parent->now, parent->vm);
 	if(!thread) {
@@ -450,7 +438,7 @@ static
 int
 ckv_fork_eval(lua_State *L)
 {
-	Thread *parent = get_thread(L); /* TODO: what if a UGen forks? */
+	Thread *parent = get_thread(L);
 	const char *code = luaL_checkstring(parent->L, -1);
 	
 	Thread *thread = new_thread(parent->L, "", parent->now, parent->vm);
@@ -488,7 +476,7 @@ int
 ckv_event_broadcast(lua_State *L)
 {
 	luaL_checktype(L, 1, LUA_TTABLE); /* event */
-	double now = get_thread(L)->vm->now; /* TODO: what if a UGen broadcasts? */
+	double now = get_thread(L)->vm->now;
 	
 	lua_getfield(L, 1, "obj");
 	Event *ev = lua_touserdata(L, -1);
