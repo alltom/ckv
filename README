@@ -15,9 +15,13 @@
 --                  RtAudio.h    to /usr/local/include/
 --                  RtError.h    to /usr/local/include/
 --      http://www.music.mcgill.ca/~gary/rtaudio/
+--
+--    FFMPEG: download, build, and "make install"
+--      http://ffmpeg.org/
 -- 
 --   ckv:
 --     $ make
+--     $ ./ckv -h
 
 -- EXECUTABLE SUMMARY (run this file)
 
