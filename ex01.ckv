@@ -31,8 +31,8 @@ fork(function()
 		count = count + 1
 		print(count, "sines");
 		
-		connect(SinOsc:new(100 + count * 100), dac);
-		dac.gain = 1.0 / count;
+		connect(SinOsc:new(100 + count * 100), speaker);
+		speaker.gain = 1.0 / count;
 	end
 end)
 

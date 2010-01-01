@@ -2,7 +2,7 @@
 s = SinOsc:new();
 
 while yield(global.fun_time) do
-	connect(s, dac);
+	connect(s, speaker);
 	
 	s.freq = 440;
 	for i = 1, 50, 1 do
@@ -10,5 +10,5 @@ while yield(global.fun_time) do
 		yield(sample_rate / 100.0);
 	end
 	
-	disconnect(s, dac);
+	disconnect(s, speaker);
 end

@@ -127,7 +127,9 @@ int open_ckvugen(lua_State *L) {
 	lua_getfield(L, -1, "new");
 	lua_pushvalue(L, -2); /* push Gain again (argument to new) */
 	lua_call(L, 1, 1);
-	lua_setglobal(L, "dac");
+	lua_pushvalue(L, -1); /* dup dac */
+	lua_setglobal(L, "dac"); /* pops one */
+	lua_setglobal(L, "speaker"); /* pops other */
 	lua_pop(L, 1); /* pop Gain */
 	
 	return 1; /* return globals */

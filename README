@@ -33,7 +33,7 @@
 --     $ ./ckv README
 --     $ ./ckv ex01.ckv
 --     $ ./ckv ex02.ckv
---     $ ./ckv ex03a.ckv ex03b.ckv
+--     $ ./ckv ex03.ckv ex03a.ckv ex03b.ckv
 
 -- EXECUTABLE SUMMARY (run this file)
 
@@ -75,9 +75,9 @@ fork(function()
     
     -- fork_eval(str) executes a string as Lua code!
     fork_eval("local n = " .. which .. ";"
-           .. "connect(n, dac);"
+           .. "connect(n, speaker);"
            .. "yield(sample_rate / 2);"
-           .. "disconnect(n, dac);");
+           .. "disconnect(n, speaker);");
   end
 end)
 
