@@ -551,3 +551,11 @@ open_ckv(lua_State *L) {
 	
 	return 1;
 }
+
+void
+pushstdglobal(lua_State *L, const char *name)
+{
+	Thread *thread = get_thread(L);
+	lua_getglobal(thread->vm->L, name);
+	lua_xmove(thread->vm->L, L, 1);
+}

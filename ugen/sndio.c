@@ -233,6 +233,10 @@ ckv_sndin_new(lua_State *L)
 	lua_pushvalue(L, 2);
 	lua_setfield(L, -2, "filename");
 	
+	/* self.duration = 220500 (a hack until we can actually read file's duration) */
+	lua_pushnumber(L, 220500);
+	lua_setfield(L, -2, "duration");
+	
 	/* self.last_tick = -1 */
 	lua_pushnumber(L, -1);
 	lua_setfield(L, -2, "last_tick");
@@ -250,6 +254,32 @@ ckv_sndin_new(lua_State *L)
 	return 1; /* return self */
 }
 
+/* args: SndIn (class), filename */
+static
+int
+ckv_sndin_play(lua_State *L)
+{
+	luaL_checktype(L, 1, LUA_TTABLE);
+	luaL_checktype(L, 2, LUA_TSTRING);
+	
+	if(lua_gettop(L) == 2)
+		pushstdglobal(L, "speaker");
+	
+	/* create SndIn obj */
+	lua_pushcfunction(L, ckv_sndin_new);
+	lua_pushvalue(L, 1); /* SndIn */
+	lua_pushvalue(L, 2); /* filename */
+	lua_call(L, 2 /* args */, 1 /* return values */);
+	
+	pushstdglobal(L, "fork");
+	lua_getfield(L, 1, "__play_thread");
+	lua_pushvalue(L, -3); /* SndIn created above */
+	lua_pushvalue(L, 3); /* dest ugen */
+	lua_call(L, 3 /* args */, 1 /* return values */);
+	
+	return 1; /* return forked thread */
+}
+
 /* LIBRARY REGISTRATION */
 
 int
@@ -257,7 +287,17 @@ open_ugen_sndin(lua_State *L)
 {
 	lua_createtable(L, 0, 1 /* estimated number of functions */);
 	lua_pushcfunction(L, ckv_sndin_new); lua_setfield(L, -2, "new");
+	lua_pushcfunction(L, ckv_sndin_play); lua_setfield(L, -2, "play");
 	lua_setglobal(L, "SndIn"); /* pops */
+	
+	/* this function is in Lua so that it can resume after yielding */
+	(void) luaL_dostring(L,
+	"SndIn.__play_thread = function(sndin, dest)"
+	"  connect(sndin, dest);"
+	"  yield(sndin.duration);"
+	"  disconnect(sndin, dest);"
+	"end"
+	);
 	
 	return 0;
 }
