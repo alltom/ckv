@@ -68,18 +68,32 @@ static int ckv_ugen_sum_inputs(lua_State *L) {
 
 /* CONNECT & DISCONNECT */
 
-/* args: source, dest, port */
-static int ckv_connect(lua_State *L) {
-	luaL_checktype(L, 1, LUA_TTABLE);
-	luaL_checktype(L, 2, LUA_TTABLE);
-	const char *port = lua_tostring(L, 3);
+/* args: source1, dest1/source2, dest2/source3, ... */
+static
+int
+ckv_connect(lua_State *L) {
+	int i, source, dest;
+	int nargs = lua_gettop(L);
 	
-	/* dest.inputs[port or "default"][source] = true; */
-	lua_getfield(L, 2, "inputs");
-	lua_getfield(L, -1, port == NULL ? "default" : port);
-	lua_pushvalue(L, 1); /* source */
-	lua_pushboolean(L, 1);
-	lua_settable(L, -3);
+	if(nargs < 2)
+		return luaL_error(L, "connect() expects at least two arguments, received %d", nargs);
+	
+	for(i = 1; i < nargs; i++) {
+		source = i;
+		dest = i + 1;
+		
+		luaL_checktype(L, source, LUA_TTABLE);
+		luaL_checktype(L, dest, LUA_TTABLE);
+		
+		/* dest.inputs["default"][source] = true; */
+		lua_getfield(L, dest, "inputs");
+		lua_getfield(L, -1, "default");
+		lua_pushvalue(L, source); /* source */
+		lua_pushboolean(L, 1);
+		lua_settable(L, -3);
+		
+		lua_pop(L, 2); /* pop dest.inputs["default"] and dest.inputs */
+	}
 	
 	return 0;
 }
