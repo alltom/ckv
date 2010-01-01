@@ -388,6 +388,10 @@ main(int argc, const char *argv[])
 		
 	}
 	
+	/* ensure userdata garbage collection routines are called */
+	/* we should unregister all threads before doing this so threads are GC'd too */
+	lua_gc(vm.L, LUA_GCCOLLECT, 0);
+	
 	close_vm(&vm);
 	
 	return EXIT_SUCCESS;
