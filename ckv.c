@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <math.h>
+#include <pthread.h>
 
 #define GLOBAL_NAMESPACE "global"
 #define THREADS_TABLE "threads"
@@ -27,9 +28,9 @@ typedef struct VM {
 	int num_sleeping_threads;
 	lua_State *L; /* global global state */
 	double now;
-	int stopped;
 	
 	unsigned int audio_now; /* used in audio callback; unused in silent mode */
+	pthread_mutex_t audio_done;
 	int sample_rate;
 	int channels;
 } VM;
@@ -69,7 +70,6 @@ int
 init_vm(VM *vm, int all_libs)
 {
 	vm->now = 0;
-	vm->stopped = 0;
 	vm->num_sleeping_threads = 0;
 	
 	vm->audio_now = 0;
@@ -334,7 +334,7 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 				run_one(vm);
 			
 			if(queue_empty(vm->queue) && vm->num_sleeping_threads == 0)
-				vm->stopped = 1;
+				pthread_mutex_unlock(&vm->audio_done);
 			
 			vm->now = vm->audio_now;
 		}
@@ -418,13 +418,17 @@ main(int argc, const char *argv[])
 		
 	} else {
 		
+		pthread_mutex_init(&vm.audio_done, NULL /* attr */);
+		pthread_mutex_lock(&vm.audio_done);
+		
 		if(!start_audio(render_audio, vm.sample_rate, &vm)) {
+			pthread_mutex_unlock(&vm.audio_done);
 			fprintf(stderr, "[ckv] could not start audio\n");
 			return EXIT_FAILURE;
 		}
 		
-		while(!vm.stopped)
-			sleep(1);
+		/* wait for audio to finish */
+		pthread_mutex_lock(&vm.audio_done);
 		
 		stop_audio();
 		
