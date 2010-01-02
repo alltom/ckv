@@ -191,6 +191,17 @@ ckv_sndin_close(lua_State *L)
 }
 
 static
+int
+ckv_sndin_release(lua_State *L)
+{
+	SndIn *sndin = lua_touserdata(L, 1);
+	sndin_close(sndin);
+	free(sndin);
+	
+	return 0;
+}
+
+static
 const
 luaL_Reg
 ckvugen_sndin[] = {
@@ -223,10 +234,15 @@ ckv_sndin_new(lua_State *L)
 	}
 	
 	/* self */
-	lua_createtable(L, 2 /* non-array */, 0 /* array */);
+	lua_createtable(L, 0 /* array */, 2 /* non-array */);
 	
+	/* set GC routine, then */
 	/* self.obj = sndin* */
 	lua_pushlightuserdata(L, sndin);
+	lua_createtable(L, 0 /* array */, 1 /* non-array */); /* new metatable */
+	lua_pushcfunction(L, ckv_sndin_release);
+	lua_setfield(L, -2, "__gc");
+	lua_setmetatable(L, -2);
 	lua_setfield(L, -2, "obj");
 	
 	/* self.filename = filename */
