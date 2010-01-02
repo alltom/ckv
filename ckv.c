@@ -323,6 +323,9 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	VM *vm = (VM *)userData;
 	unsigned int i;
 	
+	lua_getglobal(vm->L, "dac");
+	lua_getfield(vm->L, -1, "tick");
+	
 	for(i = 0; i < nFrames; i++) {
 		if(vm->now < vm->audio_now) {
 			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now)
@@ -334,16 +337,17 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 			vm->now = vm->audio_now;
 		}
 		
-		lua_getglobal(vm->L, "dac");
-		lua_getfield(vm->L, -1, "tick");
-		lua_pushvalue(vm->L, -2); /* push dac */
+		lua_pushvalue(vm->L, 2); /* tick */
+		lua_pushvalue(vm->L, 1); /* dac */
 		lua_call(vm->L, 1, 1); /* dac.tick(dac) yields a sample */
 		outputBuffer[i * 2] = lua_tonumber(vm->L, -1);
 		outputBuffer[i * 2 + 1] = outputBuffer[i * 2];
-		lua_pop(vm->L, 2); /* pop sample and dac */
+		lua_pop(vm->L, 1); /* pop sample */
 		
 		vm->audio_now++;
 	}
+	
+	lua_pop(vm->L, 2); /* pop dac and dac.tick */
 }
 
 int
