@@ -106,6 +106,7 @@ init_vm(VM *vm, int all_libs)
 	if(all_libs) {
 		lua_pushcfunction(vm->L, luaopen_base); lua_call(vm->L, 0, 0);
 		lua_pushcfunction(vm->L, luaopen_package); lua_call(vm->L, 0, 0);
+		lua_pushcfunction(vm->L, luaopen_debug); lua_call(vm->L, 0, 0);
 		lua_pushcfunction(vm->L, luaopen_io); lua_call(vm->L, 0, 0);
 		lua_pushcfunction(vm->L, luaopen_os); lua_call(vm->L, 0, 0);
 	} else {
