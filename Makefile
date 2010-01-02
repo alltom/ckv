@@ -2,8 +2,8 @@ CC = gcc
 CFLAGS = -g -ansi -pedantic -Wall -O3
 LDFLAGS = -llua
 LDFLAGS += -lrtaudio -framework CoreAudio -lpthread # audio
-LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lx264 # sndio
-UGEN_OBJECTS=ugen/gain.o ugen/sinosc.o ugen/sndio.o ugen/step.o
+LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lx264 # sndin
+UGEN_OBJECTS=ugen/gain.o ugen/sinosc.o ugen/sndin.o ugen/step.o
 OBJECTS = ckv.o luabaselite.o ugen/ugen.o $(UGEN_OBJECTS) audio.o pq.o
 EXECUTABLE=ckv
 
@@ -13,8 +13,8 @@ $(EXECUTABLE): $(OBJECTS)
 audio.o: audio.cpp
 	g++ $(CFLAGS) -c -o audio.o audio.cpp -D__MACOSX_CORE__
 
-ugen/sndio.o: ugen/sndio.c
-	$(CC) -g -Wall -O3 -c -o ugen/sndio.o ugen/sndio.c
+ugen/sndin.o: ugen/sndin.c
+	$(CC) -g -Wall -O3 -c -o ugen/sndin.o ugen/sndin.c
 
 clean:
 	rm -f *.o */*.o $(EXECUTABLE)
