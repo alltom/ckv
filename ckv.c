@@ -588,6 +588,13 @@ open_ckv(lua_State *L) {
 	lua_setglobal(L, "rand"); /* alias as rand */
 	lua_pop(L, 1); /* pop math */
 	
+	/* handy random functions */
+	(void) luaL_dostring(L,
+	"function maybe() return random() < 0.5 end "
+	"function probably() return random() < 0.7 end "
+	"function usually() return random() < 0.9 end "
+	);
+	
 	return 1;
 }
 
