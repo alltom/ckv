@@ -56,10 +56,9 @@ static int ckv_ugen_sum_inputs(lua_State *L) {
 		lua_pushvalue(L, -3); /* source */
 		lua_call(L, 1, 1); /* source.tick(source) */
 		sample += lua_tonumber(L, -1);
-		lua_pop(L, 1);
 		
-		/* removes 'value'; keeps 'key' for next iteration */
-		lua_pop(L, 1);
+		/* remove sample and source; keeps 'key' for next iteration */
+		lua_pop(L, 2);
 	}
 	
 	lua_pushnumber(L, sample);
