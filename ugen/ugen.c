@@ -135,6 +135,7 @@ int open_ckvugen(lua_State *L) {
 	lua_pushcfunction(L, open_ugen_gain); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_sinosc); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_sndin); lua_call(L, 0, 0);
+	lua_pushcfunction(L, open_ugen_step); lua_call(L, 0, 0);
 	
 	/* dac */
 	lua_getglobal(L, "Gain");
@@ -147,14 +148,14 @@ int open_ckvugen(lua_State *L) {
 	lua_pop(L, 1); /* pop Gain */
 	
 	/* adc */
-	lua_getglobal(L, "Gain");
+	lua_getglobal(L, "Step");
 	lua_getfield(L, -1, "new");
-	lua_pushvalue(L, -2); /* push Gain again (argument to new) */
+	lua_pushvalue(L, -2); /* push Step again (argument to new) */
 	lua_call(L, 1, 1);
-	lua_pushvalue(L, -1); /* dup dac */
+	lua_pushvalue(L, -1); /* dup adc */
 	lua_setglobal(L, "adc"); /* pops one */
 	lua_setglobal(L, "mic"); /* pops other */
-	lua_pop(L, 1); /* pop Gain */
+	lua_pop(L, 1); /* pop Step */
 	
 	return 1; /* return globals */
 }

@@ -3,7 +3,7 @@ CFLAGS = -g -ansi -Wall -O3
 LDFLAGS = -llua
 LDFLAGS += -lrtaudio -framework CoreAudio -lpthread # audio
 LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lx264 # sndio
-UGEN_OBJECTS=ugen/gain.o ugen/sinosc.o ugen/sndio.o
+UGEN_OBJECTS=ugen/gain.o ugen/sinosc.o ugen/sndio.o ugen/step.o
 OBJECTS = ckv.o luabaselite.o ugen/ugen.o $(UGEN_OBJECTS) audio.o pq.o
 EXECUTABLE=ckv
 

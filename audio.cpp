@@ -32,16 +32,19 @@ start_audio(AudioCallback _callback, int sample_rate, void *data)
 		return 0;
 	}
 	
-	RtAudio::StreamParameters parameters;
-	parameters.deviceId = dac.getDefaultOutputDevice();
-	parameters.nChannels = 2;
-	parameters.firstChannel = 0;
+	RtAudio::StreamParameters iparams, oparams;
+	iparams.deviceId = dac.getDefaultInputDevice();
+	iparams.nChannels = 1;
+	iparams.firstChannel = 0;
+	oparams.deviceId = dac.getDefaultOutputDevice();
+	oparams.nChannels = 2;
+	oparams.firstChannel = 0;
 	unsigned int bufferFrames = 256;
 	
 	callback = _callback;
 	
 	try {
-		dac.openStream(&parameters, NULL, RTAUDIO_FLOAT64, sample_rate, &bufferFrames, &render, data);
+		dac.openStream(&oparams, &iparams, RTAUDIO_FLOAT64, sample_rate, &bufferFrames, &render, data);
 		dac.startStream();
 	} catch(RtError& e) {
 		e.printMessage();

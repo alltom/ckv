@@ -325,6 +325,7 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	
 	lua_getglobal(vm->L, "dac");
 	lua_getfield(vm->L, -1, "tick");
+	lua_getglobal(vm->L, "adc");
 	
 	for(i = 0; i < nFrames; i++) {
 		if(vm->now < vm->audio_now) {
@@ -337,6 +338,11 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 			vm->now = vm->audio_now;
 		}
 		
+		/* set mic sample */
+		lua_pushnumber(vm->L, inputBuffer[i]);
+		lua_setfield(vm->L, 3, "next");
+		
+		/* tick dac */
 		lua_pushvalue(vm->L, 2); /* tick */
 		lua_pushvalue(vm->L, 1); /* dac */
 		lua_call(vm->L, 1, 1); /* dac.tick(dac) yields a sample */
@@ -347,7 +353,7 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 		vm->audio_now++;
 	}
 	
-	lua_pop(vm->L, 2); /* pop dac and dac.tick */
+	lua_pop(vm->L, 3); /* pop dac and dac.tick and adc */
 }
 
 int
