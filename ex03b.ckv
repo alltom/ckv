@@ -7,7 +7,7 @@ while yield(global.fun_time) do
 	s.freq = 440;
 	for i = 1, 50, 1 do
 		s.freq = s.freq * 1.01;
-		yield(sample_rate / 100.0);
+		yield(second / 100.0);
 	end
 	
 	disconnect(s, speaker);

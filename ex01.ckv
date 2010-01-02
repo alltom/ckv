@@ -19,6 +19,6 @@ fork(function()
 end)
 
 for i = 1, 50, 1 do
-	yield(sample_rate / 4);
+	yield(0.25 * seconds);
 	ev:broadcast();
 end

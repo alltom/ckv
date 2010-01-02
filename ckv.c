@@ -100,6 +100,36 @@ init_vm(VM *vm, int all_libs)
 	/* set the sample rate */
 	lua_pushnumber(vm->L, vm->sample_rate);
 	lua_setglobal(vm->L, "sample_rate");
+	lua_pushnumber(vm->L, 1);
+	lua_pushnumber(vm->L, 1);
+	lua_setglobal(vm->L, "sample");
+	lua_setglobal(vm->L, "samples");
+	lua_pushnumber(vm->L, vm->sample_rate / 1000.0);
+	lua_setglobal(vm->L, "ms");
+	lua_pushnumber(vm->L, vm->sample_rate);
+	lua_pushnumber(vm->L, vm->sample_rate);
+	lua_setglobal(vm->L, "second");
+	lua_setglobal(vm->L, "seconds");
+	lua_pushnumber(vm->L, vm->sample_rate * 60);
+	lua_pushnumber(vm->L, vm->sample_rate * 60);
+	lua_setglobal(vm->L, "minute");
+	lua_setglobal(vm->L, "minutes");
+	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60);
+	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60);
+	lua_setglobal(vm->L, "hour");
+	lua_setglobal(vm->L, "hours");
+	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24);
+	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24);
+	lua_setglobal(vm->L, "day");
+	lua_setglobal(vm->L, "days");
+	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24 * 7);
+	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24 * 7);
+	lua_setglobal(vm->L, "week");
+	lua_setglobal(vm->L, "weeks");
+	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24 * 7 * 2);
+	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24 * 7 * 2);
+	lua_setglobal(vm->L, "fortnight");
+	lua_setglobal(vm->L, "fortnights");
 	
 	/* load all the libraries a thread could need */
 	lua_gc(vm->L, LUA_GCSTOP, 0); /* stop collector during initialization */

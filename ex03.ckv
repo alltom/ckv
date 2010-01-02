@@ -5,5 +5,5 @@ global.fun_time = Event:new();
 
 while true do
 	global.fun_time:broadcast();
-	yield(sample_rate * 2);
+	yield(2 * seconds);
 end

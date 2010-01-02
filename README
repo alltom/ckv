@@ -76,7 +76,7 @@ fork(function()
     -- fork_eval(str) executes a string as Lua code!
     fork_eval("local n = " .. which .. ";"
            .. "connect(n, speaker);"
-           .. "yield(sample_rate / 2);"
+           .. "yield(second / 2);"
            .. "disconnect(n, speaker);");
   end
 end)
@@ -85,6 +85,6 @@ global.nb = "to share between script files, put stuff in global!";
 print(global.nb .. " and try \"ckv -h\" sometime!");
 
 while true do
-  yield(math.random() * sample_rate * 4 + 1);
+  yield(math.random() * second * 4 + 1);
   ev:broadcast();
 end
