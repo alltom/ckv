@@ -250,7 +250,10 @@ ckv_sndin_new(lua_State *L)
 	lua_setfield(L, -2, "filename");
 	
 	/* self.duration = 220500 (a hack until we can actually read file's duration) */
-	lua_pushnumber(L, 220500);
+	pushstdglobal(L, "sample_rate");
+	lua_Number sample_rate = lua_tonumber(L, -1);
+	lua_pop(L, 1);
+	lua_pushnumber(L, sndin->pFormatCtx->duration / 1000000.0 * sample_rate);
 	lua_setfield(L, -2, "duration");
 	
 	/* self.last_tick = -1 */
