@@ -15,7 +15,6 @@ typedef struct SndIn {
 	AVCodecContext *pCodecCtx;
 	int audioStream; /* which stream is audio */
 	int16_t audio_buf[AVCODEC_MAX_AUDIO_FRAME_SIZE / sizeof(int16_t)];
-	double *fwhole_file;
 	int curr_buf_count; /* number of samples currently in buffer */
 	int audio_buf_ptr; /* next sample to read from buffer */
 	int eof, closed;
