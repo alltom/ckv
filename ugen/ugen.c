@@ -5,7 +5,10 @@
 /* UGen HELPER FUNCTIONS */
 
 /* args: self */
-static int ckv_ugen_initialize_io(lua_State *L) {
+static
+int
+ckv_ugen_initialize_io(lua_State *L)
+{
 	luaL_checktype(L, 1, LUA_TTABLE);
 	
 	/* self.inputs = {}; */
@@ -24,9 +27,14 @@ static int ckv_ugen_initialize_io(lua_State *L) {
 }
 
 /* args: self, name */
-static int ckv_ugen_create_input(lua_State *L) {
+static
+int
+ckv_ugen_create_input(lua_State *L)
+{
+	const char *port;
+	
 	luaL_checktype(L, 1, LUA_TTABLE);
-	const char *port = luaL_checkstring(L, 2);
+	port = luaL_checkstring(L, 2);
 	
 	/* self.inputs[name] = {}; */
 	lua_getfield(L, 1, "inputs");
@@ -39,14 +47,18 @@ static int ckv_ugen_create_input(lua_State *L) {
 }
 
 /* args: self, port */
-static int ckv_ugen_sum_inputs(lua_State *L) {
+static
+int
+ckv_ugen_sum_inputs(lua_State *L)
+{
+	const char *port;
+	double sample = 0;
+	
 	luaL_checktype(L, 1, LUA_TTABLE);
-	const char *port = lua_gettop(L) > 1 ? lua_tostring(L, 2) : "default";
+	port = lua_gettop(L) > 1 ? lua_tostring(L, 2) : "default";
 	
 	lua_getfield(L, 1, "inputs"); /* pushes self.inputs */
 	lua_getfield(L, -1, port); /* pushes self.inputs[port] */
-	
-	double sample = 0;
 	
 	/* enumerate the inputs */
 	lua_pushnil(L); /* first key */
@@ -98,10 +110,15 @@ ckv_connect(lua_State *L) {
 }
 
 /* args: source, dest, port */
-static int ckv_disconnect(lua_State *L) {
+static
+int
+ckv_disconnect(lua_State *L)
+{
+	const char *port;
+	
 	luaL_checktype(L, 1, LUA_TTABLE);
 	luaL_checktype(L, 2, LUA_TTABLE);
-	const char *port = lua_tostring(L, 3);
+	port = lua_tostring(L, 3);
 	
 	/* dest.inputs[port or "default"][source] = true; */
 	lua_getfield(L, 2, "inputs");
@@ -116,7 +133,8 @@ static int ckv_disconnect(lua_State *L) {
 /* LIBRARY REGISTRATION */
 
 /* opens ckv library */
-int open_ckvugen(lua_State *L) {
+int
+open_ckvugen(lua_State *L) {
 	/* UGen */
 	lua_createtable(L, 0, 3 /* estimated number of functions */);
 	lua_pushcfunction(L, ckv_ugen_initialize_io); lua_setfield(L, -2, "initialize_io");

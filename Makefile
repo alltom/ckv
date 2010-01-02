@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -g -ansi -Wall -O3
+CFLAGS = -g -ansi -pedantic -Wall -O3
 LDFLAGS = -llua
 LDFLAGS += -lrtaudio -framework CoreAudio -lpthread # audio
 LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lx264 # sndio

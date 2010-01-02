@@ -264,10 +264,11 @@ run_one(VM *vm)
 			print_warning(thread->L, "attempted to yield nil");
 		} else if(lua_type(thread->L, 1) == LUA_TTABLE) {
 			/* sleep on an event */
+			Event *ev;
 			
 			lua_pushstring(thread->L, "obj");
 			lua_rawget(thread->L, 1);
-			Event *ev = lua_touserdata(thread->L, -1);
+			ev = lua_touserdata(thread->L, -1);
 			lua_pop(thread->L, 1);
 			
 			if(ev == NULL) {
@@ -444,9 +445,11 @@ static
 Thread *
 get_thread(lua_State *L)
 {
+	Thread *thread;
+	
 	lua_pushlightuserdata(L, L);
 	lua_gettable(L, LUA_REGISTRYINDEX);
-	Thread *thread = lua_touserdata(L, -1);
+	thread = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	return thread;
 }
@@ -520,11 +523,14 @@ static
 int
 ckv_event_broadcast(lua_State *L)
 {
+	double now;
+	Event *ev;
+	
 	luaL_checktype(L, 1, LUA_TTABLE); /* event */
-	double now = get_thread(L)->vm->now;
+	now = get_thread(L)->vm->now;
 	
 	lua_getfield(L, 1, "obj");
-	Event *ev = lua_touserdata(L, -1);
+	ev = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
 	while(!queue_empty(ev->waiting)) {
@@ -541,9 +547,11 @@ static
 int
 ckv_event_new(lua_State *L)
 {
+	Event *ev;
+	
 	luaL_checktype(L, 1, LUA_TTABLE); /* Event */
 	
-	Event *ev = malloc(sizeof(Event));
+	ev = malloc(sizeof(Event));
 	if(ev == NULL) {
 		lua_pushnil(L);
 		return 1;
