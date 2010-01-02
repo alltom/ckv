@@ -428,6 +428,7 @@ main(int argc, const char *argv[])
 		}
 		
 		/* wait for audio to finish */
+		/* ugh, but there's a race here */
 		pthread_mutex_lock(&vm.audio_done);
 		
 		stop_audio();
