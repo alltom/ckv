@@ -41,7 +41,7 @@ static int ckv_ugen_create_input(lua_State *L) {
 /* args: self, port */
 static int ckv_ugen_sum_inputs(lua_State *L) {
 	luaL_checktype(L, 1, LUA_TTABLE);
-	const char *port = luaL_checkstring(L, 2);
+	const char *port = lua_gettop(L) > 1 ? lua_tostring(L, 2) : "default";
 	
 	lua_getfield(L, 1, "inputs"); /* pushes self.inputs */
 	lua_getfield(L, -1, port); /* pushes self.inputs[port] */
