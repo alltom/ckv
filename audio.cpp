@@ -5,7 +5,7 @@ extern "C" {
 #include <RtAudio.h>
 #include <iostream>
 
-static RtAudio dac;
+static RtAudio audio;
 static AudioCallback callback;
 
 static
@@ -27,16 +27,16 @@ extern "C" {
 int
 start_audio(AudioCallback _callback, int sample_rate, void *data)
 {
-	if(dac.getDeviceCount() < 1) {
+	if(audio.getDeviceCount() < 1) {
 		std::cout << "No audio devices found!\n";
 		return 0;
 	}
 	
 	RtAudio::StreamParameters iparams, oparams;
-	iparams.deviceId = dac.getDefaultInputDevice();
+	iparams.deviceId = audio.getDefaultInputDevice();
 	iparams.nChannels = 1;
 	iparams.firstChannel = 0;
-	oparams.deviceId = dac.getDefaultOutputDevice();
+	oparams.deviceId = audio.getDefaultOutputDevice();
 	oparams.nChannels = 2;
 	oparams.firstChannel = 0;
 	unsigned int bufferFrames = 256;
@@ -44,8 +44,8 @@ start_audio(AudioCallback _callback, int sample_rate, void *data)
 	callback = _callback;
 	
 	try {
-		dac.openStream(&oparams, &iparams, RTAUDIO_FLOAT64, sample_rate, &bufferFrames, &render, data);
-		dac.startStream();
+		audio.openStream(&oparams, &iparams, RTAUDIO_FLOAT64, sample_rate, &bufferFrames, &render, data);
+		audio.startStream();
 	} catch(RtError& e) {
 		e.printMessage();
 		return 0;
@@ -58,13 +58,13 @@ void
 stop_audio(void)
 {
 	try {
-		dac.stopStream();
+		audio.stopStream();
 	} catch(RtError& e) {
 		e.printMessage();
 	}
 	
-	if(dac.isStreamOpen())
-		dac.closeStream();
+	if(audio.isStreamOpen())
+		audio.closeStream();
 }
 
 } // extern "C"
