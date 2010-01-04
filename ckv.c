@@ -323,10 +323,14 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 {
 	VM *vm = (VM *)userData;
 	unsigned int i;
+	int counter, dac, dac_tick, adc, bh, bh_tick;
 	
-	lua_getglobal(vm->L, "dac");
-	lua_getfield(vm->L, -1, "tick");
-	lua_getglobal(vm->L, "adc");
+	counter = 1;
+	lua_getglobal(vm->L, "dac"); dac = counter++;
+	lua_getfield(vm->L, -1, "tick"); dac_tick = counter++;
+	lua_getglobal(vm->L, "adc"); adc = counter++;
+	lua_getglobal(vm->L, "blackhole"); bh = counter++;
+	lua_getfield(vm->L, -1, "tick"); bh_tick = counter++;
 	
 	for(i = 0; i < nFrames; i++) {
 		if(vm->main_thread.now < vm->audio_now) {
@@ -341,20 +345,25 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 		
 		/* set mic sample */
 		lua_pushnumber(vm->L, inputBuffer[i]);
-		lua_setfield(vm->L, 3, "next");
+		lua_setfield(vm->L, adc, "next");
+		
+		/* tick blackhole */
+		lua_pushvalue(vm->L, bh_tick);
+		lua_pushvalue(vm->L, bh);
+		lua_call(vm->L, 1, 0 /* ignore sample */);
 		
 		/* tick dac */
-		lua_pushvalue(vm->L, 2); /* tick */
-		lua_pushvalue(vm->L, 1); /* dac */
-		lua_call(vm->L, 1, 1); /* dac.tick(dac) yields a sample */
+		lua_pushvalue(vm->L, dac_tick);
+		lua_pushvalue(vm->L, dac);
+		lua_call(vm->L, 1, 1);
 		outputBuffer[i * 2] = lua_tonumber(vm->L, -1);
 		outputBuffer[i * 2 + 1] = outputBuffer[i * 2];
-		lua_pop(vm->L, 1); /* pop sample */
+		lua_pop(vm->L, 1);
 		
 		vm->audio_now++;
 	}
 	
-	lua_pop(vm->L, 3); /* pop dac and dac.tick and adc */
+	lua_pop(vm->L, counter - 1); /* pop stuff pushed at beginning of function */
 }
 
 int
