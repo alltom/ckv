@@ -261,7 +261,7 @@ ckv_sndin_new(lua_State *L)
 	lua_pushvalue(L, 2);
 	lua_setfield(L, -2, "filename");
 	
-	/* self.duration = 220500 (a hack until we can actually read file's duration) */
+	/* self.duration = ... */
 	pushstdglobal(L, "sample_rate");
 	lua_Number sample_rate = lua_tonumber(L, -1);
 	lua_pop(L, 1);
@@ -316,7 +316,7 @@ ckv_sndin_play(lua_State *L)
 int
 open_ugen_sndin(lua_State *L)
 {
-	lua_createtable(L, 0, 1 /* estimated number of functions */);
+	lua_createtable(L, 0, 2 /* estimated number of functions */);
 	lua_pushcfunction(L, ckv_sndin_new); lua_setfield(L, -2, "new");
 	lua_pushcfunction(L, ckv_sndin_play); lua_setfield(L, -2, "play");
 	lua_setglobal(L, "SndIn"); /* pops */
