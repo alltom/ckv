@@ -17,7 +17,6 @@ typedef struct Event {
 } Event;
 
 typedef struct Thread {
-	const char *filename;
 	lua_State *L;
 	double now;
 	VMPtr vm;
@@ -165,7 +164,7 @@ creates a new thread and adds reference to THREADS_TABLE
 */
 static
 Thread *
-new_thread(lua_State *L, const char *filename, double now, VM *vm)
+new_thread(lua_State *L, double now, VM *vm)
 {
 	lua_State *s; /* new thread state */
 	Thread *thread;
@@ -187,7 +186,6 @@ new_thread(lua_State *L, const char *filename, double now, VM *vm)
 	lua_pushlightuserdata(s, thread);
 	lua_settable(s, LUA_REGISTRYINDEX); /* registry[state] = thread */
 	
-	thread->filename = filename;
 	thread->L = s;
 	thread->now = now;
 	thread->vm = vm;
@@ -390,22 +388,22 @@ main(int argc, const char *argv[])
 	g_vm = &vm;
 	
 	for(i = optind; i < argc; i++) {
-		Thread *thread = new_thread(vm.L, argv[i], 0, &vm);
+		Thread *thread = new_thread(vm.L, 0, &vm);
 		prepenv(&vm, thread->L);
 		
-		switch(luaL_loadfile(thread->L, thread->filename)) {
+		switch(luaL_loadfile(thread->L, argv[i])) {
 		case LUA_ERRSYNTAX:
 			fprintf(stderr, "[ckv] %s\n", lua_tostring(thread->L, -1));
 			break;
 		case LUA_ERRMEM:
-			fprintf(stderr, "[ckv] %s: memory allocation error while loading script\n", thread->filename);
+			fprintf(stderr, "[ckv] %s: memory allocation error while loading script\n", argv[i]);
 			break;
 		case LUA_ERRFILE:
-			fprintf(stderr, "[ckv] %s: cannot open file\n", thread->filename);
+			fprintf(stderr, "[ckv] %s: cannot open file\n", argv[i]);
 			break;
 		default:
 			if(!queue_insert(vm.queue, 0, thread))
-				fprintf(stderr, "[ckv] %s: could not add to thread queue\n", thread->filename);
+				fprintf(stderr, "[ckv] %s: could not add to thread queue\n", argv[i]);
 		}
 	}
 	
@@ -473,7 +471,7 @@ ckv_fork(lua_State *L)
 {
 	Thread *parent = get_thread(L);
 	
-	Thread *thread = new_thread(parent->L, "", parent->now, parent->vm);
+	Thread *thread = new_thread(parent->L, parent->now, parent->vm);
 	if(!thread) {
 		print_warning(parent->L, "could not allocate child thread");
 		return 0;
@@ -494,7 +492,7 @@ ckv_fork_eval(lua_State *L)
 	Thread *parent = get_thread(L);
 	const char *code = luaL_checkstring(parent->L, -1);
 	
-	Thread *thread = new_thread(parent->L, "", parent->now, parent->vm);
+	Thread *thread = new_thread(parent->L, parent->now, parent->vm);
 	if(!thread) {
 		print_warning(parent->L, "could not allocate child thread");
 		return 0;
