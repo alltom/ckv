@@ -73,6 +73,7 @@ void
 sndin_get_samples(SndIn *sndin)
 {
 	AVPacket packet;
+	int i, chans, frames;
 	
 	if(sndin->closed || sndin->eof)
 		return;
@@ -97,6 +98,17 @@ sndin_get_samples(SndIn *sndin)
 			/* got buf_size bytes! */
 			/* format is int16_t (signed short) */
 			sndin->curr_buf_count = buf_size/sizeof(sndin->audio_buf[0]);
+			
+			if(sndin->pCodecCtx->channels > 1) {
+				/* take the first channel */
+				chans = sndin->pCodecCtx->channels;
+				frames = sndin->curr_buf_count / chans;
+				for(i = 0; i < frames; i++)
+					sndin->audio_buf[i] = sndin->audio_buf[i * chans];
+				
+				sndin->curr_buf_count = frames;
+			}
+			
 			sndin->audio_buf_ptr = 0;
 			return;
 		}
