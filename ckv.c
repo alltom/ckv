@@ -599,9 +599,9 @@ open_ckv(lua_State *L) {
 	
 	/* import math.random */
 	lua_getglobal(L, "math");
-	lua_getfield(L, 1, "random");
+	lua_getfield(L, -1, "random");
 	lua_setglobal(L, "random"); /* alias as random */
-	lua_getfield(L, 1, "random");
+	lua_getfield(L, -1, "random");
 	lua_setglobal(L, "rand"); /* alias as rand */
 	lua_pop(L, 1); /* pop math */
 	
@@ -611,6 +611,13 @@ open_ckv(lua_State *L) {
 	"function probably() return random() < 0.7 end "
 	"function usually() return random() < 0.9 end "
 	);
+	
+	/* seed the random number generator */
+	lua_getglobal(L, "math");
+	lua_getfield(L, -1, "randomseed");
+	lua_pushnumber(L, time(NULL));
+	lua_call(L, 1, 0);
+	lua_pop(L, 1); /* pop math */
 	
 	return 1;
 }
