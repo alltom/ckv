@@ -26,15 +26,13 @@ typedef struct VM {
 	PQ queue;
 	int num_sleeping_threads;
 	lua_State *L; /* global global state */
-	double now;
+	Thread main_thread;
 	
 	unsigned int audio_now; /* used in audio callback; unused in silent mode */
 	pthread_mutex_t audio_done;
 	int sample_rate;
 	int channels;
 } VM;
-
-VM *g_vm;
 
 static int ckv_event_new(lua_State *L);
 static int open_ckv(lua_State *L);
@@ -68,7 +66,6 @@ static
 int
 init_vm(VM *vm, int all_libs)
 {
-	vm->now = 0;
 	vm->num_sleeping_threads = 0;
 	
 	vm->audio_now = 0;
@@ -86,6 +83,14 @@ init_vm(VM *vm, int all_libs)
 		lua_close(vm->L);
 		return 0;
 	}
+	
+	vm->main_thread.vm = vm;
+	vm->main_thread.L = vm->L;
+	vm->main_thread.now = 0;
+	
+	lua_pushlightuserdata(vm->L, vm->L);
+	lua_pushlightuserdata(vm->L, &vm->main_thread);
+	lua_settable(vm->L, LUA_REGISTRYINDEX); /* registry[vm->L] = thread */
 	
 	/* create table to use as global namespace */
 	lua_newtable(vm->L);
@@ -248,10 +253,7 @@ run_one(VM *vm)
 {
 	Thread *thread = remove_queue_min(vm->queue);
 	
-	if(thread == NULL)
-		return;
-	
-	vm->now = thread->now;
+	vm->main_thread.now = thread->now;
 	
 	switch(lua_resume(thread->L, lua_gettop(thread->L) - 1)) {
 	case 0:
@@ -327,14 +329,14 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	lua_getglobal(vm->L, "adc");
 	
 	for(i = 0; i < nFrames; i++) {
-		if(vm->now < vm->audio_now) {
+		if(vm->main_thread.now < vm->audio_now) {
 			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now)
 				run_one(vm);
 			
 			if(queue_empty(vm->queue) && vm->num_sleeping_threads == 0)
 				pthread_mutex_unlock(&vm->audio_done);
 			
-			vm->now = vm->audio_now;
+			vm->main_thread.now = vm->audio_now;
 		}
 		
 		/* set mic sample */
@@ -384,8 +386,6 @@ main(int argc, const char *argv[])
 		fprintf(stderr, "[ckv] could not initialize VM\n");
 		return EXIT_FAILURE;
 	}
-	
-	g_vm = &vm;
 	
 	for(i = optind; i < argc; i++) {
 		Thread *thread = new_thread(vm.L, 0, &vm);
@@ -461,7 +461,7 @@ static
 int
 ckv_now(lua_State *L)
 {
-	lua_pushnumber(L, g_vm->now);
+	lua_pushnumber(L, get_thread(L)->now);
 	return 1;
 }
 
@@ -530,7 +530,7 @@ ckv_event_broadcast(lua_State *L)
 	Event *ev;
 	
 	luaL_checktype(L, 1, LUA_TTABLE); /* event */
-	now = get_thread(L)->vm->now;
+	now = get_thread(L)->now;
 	
 	lua_getfield(L, 1, "obj");
 	ev = lua_touserdata(L, -1);
