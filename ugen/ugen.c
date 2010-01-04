@@ -149,6 +149,7 @@ open_ckvugen(lua_State *L) {
 	lua_pop(L, 1);
 	
 	/* UGens */
+	lua_pushcfunction(L, open_ugen_delay); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_follower); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_gain); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_sinosc); lua_call(L, 0, 0);
