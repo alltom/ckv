@@ -59,3 +59,29 @@ open_ugen_sqrosc(lua_State *L)
 	
 	return 0;
 }
+
+int
+open_ugen_sawosc(lua_State *L)
+{
+	(void) luaL_dostring(L,
+	"SawOsc = {"
+	"  new = function(class, freq)"
+	"    return UGen.initialize_io({"
+	"      phase = 0.0,"
+	"      freq = freq or 440.0,"
+	"      last_value = 0.0,"
+	"      tick = function(self)"
+	"        if not (now() == self.last_tick) then"
+	"          self.last_value = self.phase;"
+	"          self.phase = (self.phase + self.freq / sample_rate) % 1.0;"
+	"          self.last_tick = now();"
+	"        end"
+	"        return self.last_value;"
+	"      end,"
+	"    })"
+	"  end"
+	"};"
+	);
+	
+	return 0;
+}
