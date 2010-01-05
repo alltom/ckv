@@ -23,6 +23,18 @@ typedef struct Thread {
 } Thread;
 
 typedef struct VM {
+	int running;
+	
+	/*
+	When VM might be used across threads, this coarse lock
+	can be used for synchronization. For example, this lock is
+	used to ensure that the main thread doesn't deallocate the
+	VM while the audio thread is processing, but it's not used
+	when ckv is invoked in silent mode.
+	*/
+	pthread_mutex_t in_use;
+	int use_lock; /* whether to use in_use lock */
+	
 	PQ queue;
 	int num_sleeping_threads;
 	lua_State *L; /* global global state */
@@ -66,7 +78,11 @@ static
 int
 init_vm(VM *vm, int all_libs)
 {
+	vm->running = 0;
+	
 	vm->num_sleeping_threads = 0;
+	
+	vm->use_lock = 0;
 	
 	vm->audio_now = 0;
 	vm->sample_rate = 44100;
@@ -104,6 +120,8 @@ init_vm(VM *vm, int all_libs)
 	/* set the sample rate */
 	lua_pushnumber(vm->L, vm->sample_rate);
 	lua_setglobal(vm->L, "sample_rate");
+	
+	/* set duration helper variables */
 	lua_pushnumber(vm->L, 1);
 	lua_pushnumber(vm->L, 1);
 	lua_setglobal(vm->L, "sample");
@@ -152,6 +170,8 @@ init_vm(VM *vm, int all_libs)
 	lua_pushcfunction(vm->L, open_ckv); lua_call(vm->L, 0, 0);
 	lua_pushcfunction(vm->L, open_ckvugen); lua_call(vm->L, 0, 0);
 	lua_gc(vm->L, LUA_GCRESTART, 0);
+	
+	vm->running = 1;
 	
 	return 1;
 }
@@ -247,6 +267,7 @@ prepenv(VM *vm, lua_State *L)
 	}
 }
 
+/* NOTE: caller must acquire vm.in_use (where necessary)! */
 static
 void
 run_one(VM *vm)
@@ -325,6 +346,8 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	unsigned int i;
 	int counter, dac, dac_tick, adc, bh, bh_tick;
 	
+	pthread_mutex_unlock(&vm->in_use);
+	
 	counter = 1;
 	lua_getglobal(vm->L, "dac"); dac = counter++;
 	lua_getfield(vm->L, -1, "tick"); dac_tick = counter++;
@@ -333,6 +356,15 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	lua_getfield(vm->L, -1, "tick"); bh_tick = counter++;
 	
 	for(i = 0; i < nFrames; i++) {
+		if(!vm->running) {
+			for(; i < nFrames; i++) {
+				outputBuffer[i * 2] = 0;
+				outputBuffer[i * 2 + 1] = 0;
+			}
+			
+			break;
+		}
+		
 		if(vm->main_thread.now < vm->audio_now) {
 			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now)
 				run_one(vm);
@@ -361,6 +393,8 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	}
 	
 	lua_pop(vm->L, counter - 1); /* pop stuff pushed at beginning of function */
+	
+	pthread_mutex_unlock(&vm->in_use);
 }
 
 int
@@ -422,11 +456,14 @@ main(int argc, const char *argv[])
 		
 	} else {
 		
+		vm.use_lock = 1;
+		
+		pthread_mutex_init(&vm.in_use, NULL /* attr */);
+		
 		pthread_mutex_init(&vm.audio_done, NULL /* attr */);
 		pthread_mutex_lock(&vm.audio_done);
 		
 		if(!start_audio(render_audio, vm.sample_rate, &vm)) {
-			pthread_mutex_unlock(&vm.audio_done);
 			fprintf(stderr, "[ckv] could not start audio\n");
 			return EXIT_FAILURE;
 		}
@@ -436,6 +473,9 @@ main(int argc, const char *argv[])
 		pthread_mutex_lock(&vm.audio_done);
 		
 		stop_audio();
+		
+		/* get exclusive access to the VM (never unlocked, 'cause we're quitting) */
+		pthread_mutex_lock(&vm.in_use);
 		
 	}
 	
@@ -469,6 +509,22 @@ ckv_now(lua_State *L)
 {
 	lua_pushnumber(L, get_thread(L)->now);
 	return 1;
+}
+
+static
+int
+ckv_exit(lua_State *L)
+{
+	VM *vm = get_thread(L)->vm;
+	
+	if(vm->running) {
+		vm->running = 0;
+		
+		if(vm->use_lock)
+			pthread_mutex_unlock(&vm->audio_done);
+	}
+	
+	return 0;
 }
 
 static
@@ -593,6 +649,7 @@ static
 int
 open_ckv(lua_State *L) {
 	lua_register(L, "now", ckv_now);
+	lua_register(L, "exit", ckv_exit);
 	lua_register(L, "fork", ckv_fork);
 	lua_register(L, "fork_eval", ckv_fork_eval);
 	lua_register(L, "yield", ckv_yield);
