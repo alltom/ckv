@@ -333,7 +333,7 @@ void
 run(VM *vm)
 {
 	/* note: will exit when all threads have died OR are asleep */
-	while(!queue_empty(vm->queue))
+	while(vm->running && !queue_empty(vm->queue))
 		run_one(vm);
 }
 
@@ -356,18 +356,22 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	lua_getfield(vm->L, -1, "tick"); bh_tick = counter++;
 	
 	for(i = 0; i < nFrames; i++) {
-		if(!vm->running) {
-			for(; i < nFrames; i++) {
-				outputBuffer[i * 2] = 0;
-				outputBuffer[i * 2 + 1] = 0;
+		if(vm->main_thread.now < vm->audio_now) {
+			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now) {
+				if(!vm->running) {
+					for(; i < nFrames; i++) {
+						outputBuffer[i * 2] = 0;
+						outputBuffer[i * 2 + 1] = 0;
+					}
+					
+					break;
+				}
+				
+				run_one(vm);
 			}
 			
-			break;
-		}
-		
-		if(vm->main_thread.now < vm->audio_now) {
-			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now)
-				run_one(vm);
+			if(!vm->running)
+				break;
 			
 			vm->main_thread.now = vm->audio_now;
 		}
@@ -524,7 +528,8 @@ ckv_exit(lua_State *L)
 			pthread_mutex_unlock(&vm->audio_done);
 	}
 	
-	return 0;
+	lua_pushnumber(L, 0);
+	return lua_yield(L, 1);
 }
 
 static
