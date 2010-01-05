@@ -154,6 +154,7 @@ open_ckvugen(lua_State *L) {
 	lua_pushcfunction(L, open_ugen_gain); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_sinosc); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_sndin); lua_call(L, 0, 0);
+	lua_pushcfunction(L, open_ugen_sqrosc); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_step); lua_call(L, 0, 0);
 	
 	/* blackhole */
