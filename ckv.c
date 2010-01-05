@@ -337,9 +337,6 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now)
 				run_one(vm);
 			
-			if(queue_empty(vm->queue) && vm->num_sleeping_threads == 0)
-				pthread_mutex_unlock(&vm->audio_done);
-			
 			vm->main_thread.now = vm->audio_now;
 		}
 		
