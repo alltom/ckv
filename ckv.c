@@ -621,6 +621,10 @@ open_ckv(lua_State *L) {
 	"function usually() return random() < 0.9 end "
 	);
 	
+	(void) luaL_dostring(L,
+	"forever = Event:new()"
+	);
+	
 	/* seed the random number generator */
 	lua_getglobal(L, "math");
 	lua_getfield(L, -1, "randomseed");
