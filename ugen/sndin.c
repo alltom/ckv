@@ -302,6 +302,9 @@ ckv_sndin_play(lua_State *L)
 	lua_pushvalue(L, 2); /* filename */
 	lua_call(L, 2 /* args */, 1 /* return values */);
 	
+	if(lua_isnil(L, -1))
+		return 0;
+	
 	pushstdglobal(L, "fork");
 	lua_getfield(L, 1, "__play_thread");
 	lua_pushvalue(L, -3); /* SndIn created above */
