@@ -241,7 +241,7 @@ ckv_sndin_new(lua_State *L)
 	
 	filename = lua_tostring(L, 2);
 	if(!sndin_open(sndin, filename)) {
-		fprintf(stderr, "[ckv] could not open file\n");
+		fprintf(stderr, "[ckv] could not open file \"%s\"\n", filename);
 		return 0;
 	}
 	
