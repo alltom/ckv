@@ -2,6 +2,22 @@
 #include "../ckv.h"
 #include "ugen.h"
 
+/* ugens to load */
+lua_CFunction ugens[] = {
+	open_ugen_delay,
+	open_ugen_follower,
+	open_ugen_gain,
+	open_ugen_impulse,
+	open_ugen_noise,
+	open_ugen_sawosc,
+	open_ugen_sinosc,
+	open_ugen_sndin,
+	open_ugen_sqrosc,
+	open_ugen_step,
+	NULL
+};
+
+
 /* UGen HELPER FUNCTIONS */
 
 /* args: self */
@@ -135,6 +151,8 @@ ckv_disconnect(lua_State *L)
 /* opens ckv library */
 int
 open_ckvugen(lua_State *L) {
+	lua_CFunction *fn;
+	
 	/* UGen */
 	lua_createtable(L, 0, 3 /* estimated number of functions */);
 	lua_pushcfunction(L, ckv_ugen_initialize_io); lua_setfield(L, -2, "initialize_io");
@@ -148,20 +166,11 @@ open_ckvugen(lua_State *L) {
 	lua_pushcfunction(L, ckv_disconnect); lua_setfield(L, -2, "disconnect");
 	lua_pop(L, 1);
 	
-	/* standard ugens */
-	lua_pushcfunction(L, open_ugen_delay); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_follower); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_gain); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_impulse); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_noise); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_sawosc); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_sinosc); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_sndin); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_sqrosc); lua_call(L, 0, 0);
-	lua_pushcfunction(L, open_ugen_step); lua_call(L, 0, 0);
-	
-	/* custom ugens */
-	/* (put yours here) */
+	/* ugens */
+	for(fn = ugens; *fn != NULL; fn++) {
+		lua_pushcfunction(L, *fn);
+		lua_call(L, 0, 0);
+	}
 	
 	/* blackhole */
 	lua_getglobal(L, "Gain");
