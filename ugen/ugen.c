@@ -148,7 +148,7 @@ open_ckvugen(lua_State *L) {
 	lua_pushcfunction(L, ckv_disconnect); lua_setfield(L, -2, "disconnect");
 	lua_pop(L, 1);
 	
-	/* UGens */
+	/* standard ugens */
 	lua_pushcfunction(L, open_ugen_delay); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_follower); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_gain); lua_call(L, 0, 0);
@@ -158,6 +158,9 @@ open_ckvugen(lua_State *L) {
 	lua_pushcfunction(L, open_ugen_sndin); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_sqrosc); lua_call(L, 0, 0);
 	lua_pushcfunction(L, open_ugen_step); lua_call(L, 0, 0);
+	
+	/* custom ugens */
+	/* (put yours here) */
 	
 	/* blackhole */
 	lua_getglobal(L, "Gain");
