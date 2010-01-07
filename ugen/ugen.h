@@ -6,6 +6,7 @@
 int open_ugen_delay(lua_State *L);
 int open_ugen_follower(lua_State *L);
 int open_ugen_gain(lua_State *L);
+int open_ugen_impulse(lua_State *L);
 int open_ugen_noise(lua_State *L);
 int open_ugen_sawosc(lua_State *L);
 int open_ugen_sinosc(lua_State *L);
