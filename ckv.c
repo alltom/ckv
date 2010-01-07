@@ -11,10 +11,7 @@
 #define GLOBAL_NAMESPACE "global"
 #define THREADS_TABLE "threads"
 
-typedef struct Event {
-	PQ waiting;
-	unsigned long int next_pri;
-} Event;
+typedef struct VM *VMPtr;
 
 typedef struct Thread {
 	lua_State *L;
@@ -45,6 +42,11 @@ typedef struct VM {
 	int sample_rate;
 	int channels;
 } VM;
+
+typedef struct Event {
+	PQ waiting;
+	unsigned long int next_pri;
+} Event;
 
 static int ckv_event_new(lua_State *L);
 static int open_ckv(lua_State *L);
