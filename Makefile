@@ -4,7 +4,7 @@ LDFLAGS = -llua
 LDFLAGS += -lrtaudio -framework CoreAudio -lpthread # audio
 LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lx264 # sndin
 UGEN_OBJECTS=ugen/delay.o ugen/follower.o ugen/gain.o ugen/impulse.o ugen/noise.o ugen/osc.o ugen/sndin.o ugen/step.o
-OBJECTS = ckv.o luabaselite.o ugen/ugen.o $(UGEN_OBJECTS) audio.o pq.o
+OBJECTS = ckv.o ckvm.o luabaselite.o ugen/ugen.o $(UGEN_OBJECTS) audio.o pq.o
 EXECUTABLE=ckv
 
 $(EXECUTABLE): $(OBJECTS)

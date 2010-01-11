@@ -1,5 +1,6 @@
 
 #include "ckv.h"
+#include "ckvm.h"
 #include "pq.h"
 
 #include <stdio.h>
@@ -8,34 +9,9 @@
 #include <math.h>
 #include <pthread.h>
 
-#define GLOBAL_NAMESPACE "global"
-#define THREADS_TABLE "threads"
-
-typedef struct VM *VMPtr;
-
-typedef struct Thread {
-	lua_State *L;
-	double now;
-	VMPtr vm;
-} Thread;
-
 typedef struct VM {
+	CKVM ckvm;
 	int running;
-	
-	/*
-	When VM might be used across threads, this coarse lock
-	can be used for synchronization. For example, this lock is
-	used to ensure that the main thread doesn't deallocate the
-	VM while the audio thread is processing, but it's not used
-	when ckv is invoked in silent mode.
-	*/
-	pthread_mutex_t in_use;
-	int use_lock; /* whether to use in_use lock */
-	
-	PQ queue;
-	int num_sleeping_threads;
-	lua_State *L; /* global global state */
-	Thread main_thread;
 	
 	unsigned int audio_now; /* used in audio callback; unused in silent mode */
 	pthread_mutex_t audio_done;
@@ -43,13 +19,7 @@ typedef struct VM {
 	int channels;
 } VM;
 
-typedef struct Event {
-	PQ waiting;
-	unsigned long int next_pri;
-} Event;
-
-static int ckv_event_new(lua_State *L);
-static int open_ckv(lua_State *L);
+static void render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames, double streamTime, void *userData);
 
 static
 void
@@ -63,609 +33,38 @@ usage(void)
 
 static
 void
-print_warning(lua_State *L, const char *fmt, ...)
+print_error(const char *message)
 {
-	va_list argp;
-	va_start(argp, fmt);
-	luaL_where(L, 1);
-	lua_pushvfstring(L, fmt, argp);
-	va_end(argp);
-	lua_concat(L, 2);
-	fprintf(stderr, "[ckv] %s\n", lua_tostring(L, -1));
-	lua_pop(L, 1);
+	fprintf(stderr, "[ckv] %s\n", message);
 }
 
-/* returns 0 on failure */
 static
-int
-init_vm(VM *vm, int all_libs)
+void
+error_callback(CKVM vm, const char *message)
 {
-	vm->running = 0;
+	print_error(message);
+}
+
+static
+void
+open_base_libs(VM *vm, int all_libs)
+{
+	lua_State *L = ckvm_global_state(vm->ckvm);
 	
-	vm->num_sleeping_threads = 0;
-	
-	vm->use_lock = 0;
-	
-	vm->audio_now = 0;
-	vm->sample_rate = 44100;
-	vm->channels = 1;
-	
-	vm->L = luaL_newstate();
-	if(vm->L == NULL) {
-		fprintf(stderr, "[ckv] cannot init lua\n");
-		return 0;
-	}
-	
-	vm->queue = new_queue(1);
-	if(!vm->queue) {
-		lua_close(vm->L);
-		return 0;
-	}
-	
-	vm->main_thread.vm = vm;
-	vm->main_thread.L = vm->L;
-	vm->main_thread.now = 0;
-	
-	lua_pushlightuserdata(vm->L, vm->L);
-	lua_pushlightuserdata(vm->L, &vm->main_thread);
-	lua_settable(vm->L, LUA_REGISTRYINDEX); /* registry[vm->L] = thread */
-	
-	/* create table to use as global namespace */
-	lua_newtable(vm->L);
-	lua_setfield(vm->L, LUA_REGISTRYINDEX, GLOBAL_NAMESPACE);
-	
-	/* create a table for storing lua thread references */
-	lua_pushstring(vm->L, THREADS_TABLE);
-	lua_newtable(vm->L);
-	lua_rawset(vm->L, LUA_REGISTRYINDEX);
-	
-	/* set the sample rate */
-	lua_pushnumber(vm->L, vm->sample_rate);
-	lua_setglobal(vm->L, "sample_rate");
-	
-	/* set duration helper variables */
-	lua_pushnumber(vm->L, 1);
-	lua_pushnumber(vm->L, 1);
-	lua_setglobal(vm->L, "sample");
-	lua_setglobal(vm->L, "samples");
-	lua_pushnumber(vm->L, vm->sample_rate / 1000.0);
-	lua_setglobal(vm->L, "ms");
-	lua_pushnumber(vm->L, vm->sample_rate);
-	lua_pushnumber(vm->L, vm->sample_rate);
-	lua_setglobal(vm->L, "second");
-	lua_setglobal(vm->L, "seconds");
-	lua_pushnumber(vm->L, vm->sample_rate * 60);
-	lua_pushnumber(vm->L, vm->sample_rate * 60);
-	lua_setglobal(vm->L, "minute");
-	lua_setglobal(vm->L, "minutes");
-	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60);
-	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60);
-	lua_setglobal(vm->L, "hour");
-	lua_setglobal(vm->L, "hours");
-	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24);
-	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24);
-	lua_setglobal(vm->L, "day");
-	lua_setglobal(vm->L, "days");
-	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24 * 7);
-	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24 * 7);
-	lua_setglobal(vm->L, "week");
-	lua_setglobal(vm->L, "weeks");
-	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24 * 7 * 2);
-	lua_pushnumber(vm->L, vm->sample_rate * 60 * 60 * 24 * 7 * 2);
-	lua_setglobal(vm->L, "fortnight");
-	lua_setglobal(vm->L, "fortnights");
-	
-	/* load all the libraries a thread could need */
-	lua_gc(vm->L, LUA_GCSTOP, 0); /* stop collector during initialization */
+	lua_gc(L, LUA_GCSTOP, 0); /* stop collector during initialization */
 	if(all_libs) {
-		lua_pushcfunction(vm->L, luaopen_base); lua_call(vm->L, 0, 0);
-		lua_pushcfunction(vm->L, luaopen_package); lua_call(vm->L, 0, 0);
-		lua_pushcfunction(vm->L, luaopen_debug); lua_call(vm->L, 0, 0);
-		lua_pushcfunction(vm->L, luaopen_io); lua_call(vm->L, 0, 0);
-		lua_pushcfunction(vm->L, luaopen_os); lua_call(vm->L, 0, 0);
+		lua_pushcfunction(L, luaopen_base); lua_call(L, 0, 0);
+		lua_pushcfunction(L, luaopen_package); lua_call(L, 0, 0);
+		lua_pushcfunction(L, luaopen_debug); lua_call(L, 0, 0);
+		lua_pushcfunction(L, luaopen_io); lua_call(L, 0, 0);
+		lua_pushcfunction(L, luaopen_os); lua_call(L, 0, 0);
 	} else {
-		lua_pushcfunction(vm->L, open_luabaselite); lua_call(vm->L, 0, 0);
+		lua_pushcfunction(L, open_luabaselite); lua_call(L, 0, 0);
 	}
-	lua_pushcfunction(vm->L, luaopen_string); lua_call(vm->L, 0, 0);
-	lua_pushcfunction(vm->L, luaopen_table); lua_call(vm->L, 0, 0);
-	lua_pushcfunction(vm->L, luaopen_math); lua_call(vm->L, 0, 0);
-	lua_pushcfunction(vm->L, open_ckv); lua_call(vm->L, 0, 0);
-	lua_pushcfunction(vm->L, open_ckvugen); lua_call(vm->L, 0, 0);
-	lua_gc(vm->L, LUA_GCRESTART, 0);
-	
-	vm->running = 1;
-	
-	return 1;
-}
-
-static
-void
-close_vm(VM *vm)
-{
-	free(vm->queue);
-	lua_close(vm->L);
-}
-
-/*
-creates a new thread and adds reference to THREADS_TABLE
-*/
-static
-Thread *
-new_thread(lua_State *L, double now, VM *vm)
-{
-	lua_State *s; /* new thread state */
-	Thread *thread;
-	
-	thread = malloc(sizeof(Thread));
-	if(!thread)
-		return NULL;
-	
-	/* create the thread and save a reference in THREADS_TABLE */
-	/* threads are garbage collected, so reference is saved until unregister_thread */
-	lua_getfield(L, LUA_REGISTRYINDEX, THREADS_TABLE);
-	s = lua_newthread(L); /* pushes thread reference */
-	lua_pushlightuserdata(L, s);
-	lua_pushvalue(L, -2); /* push thread ref again so it's on top */
-	lua_rawset(L, -4); /* registry.threads[thread] = lua thread ref */
-	lua_pop(L, 2); /* pop original lua thread ref and registry.threads */
-	
-	lua_pushlightuserdata(s, s);
-	lua_pushlightuserdata(s, thread);
-	lua_settable(s, LUA_REGISTRYINDEX); /* registry[state] = thread */
-	
-	thread->L = s;
-	thread->now = now;
-	thread->vm = vm;
-	
-	return thread;
-}
-
-static
-void
-unregister_thread(VM *vm, Thread *thread)
-{
-	lua_pushlightuserdata(vm->L, thread->L);
-	lua_pushnil(vm->L);
-	lua_settable(vm->L, LUA_REGISTRYINDEX); /* registry[state] = nil */
-	
-	lua_getfield(vm->L, LUA_REGISTRYINDEX, THREADS_TABLE);
-	lua_pushlightuserdata(vm->L, thread->L);
-	lua_pushnil(vm->L);
-	lua_settable(vm->L, -3); /* registry.threads[state] = nil */
-	lua_pop(vm->L, 1); /* pop registry.threads */
-}
-
-/*
-Create a private global namespace for this thread,
-leaving a reference ("global") to the global global namespace.
-This is only done for files. Their children inherit the parent's namepsace.
-*/
-static
-void
-prepenv(VM *vm, lua_State *L)
-{
-	/* get lua thread ref */
-	lua_pushthread(L);
-	
-	/* get "global", give thread a blank env, then copy "global" to it */
-	lua_getfield(L, LUA_REGISTRYINDEX, GLOBAL_NAMESPACE);
-	lua_newtable(L);
-	lua_setfenv(L, -3); /* makes the newtable the env for the thread we pushed above */
-	lua_setglobal(L, GLOBAL_NAMESPACE); /* set "global" in new namespace */
-	
-	lua_pop(L, 1); /* pop lua thread ref; stack empty */
-	
-	/* copy everything in prototype global env to this env */
-	lua_pushnil(vm->L);  /* first key */
-	while(lua_next(vm->L, LUA_GLOBALSINDEX) != 0) {
-		/* copy to new env */
-		lua_pushvalue(vm->L, -2); /* push key */
-		lua_pushvalue(vm->L, -2); /* push value */
-		lua_xmove(vm->L, L, 2);
-		lua_rawset(L, LUA_GLOBALSINDEX);
-		
-		/* removes 'value'; keeps 'key' for next iteration */
-		lua_pop(vm->L, 1);
-	}
-}
-
-/* NOTE: caller must acquire vm.in_use (where necessary)! */
-static
-void
-run_one(VM *vm)
-{
-	Thread *thread = remove_queue_min(vm->queue);
-	
-	vm->main_thread.now = thread->now;
-	
-	switch(lua_resume(thread->L, lua_gettop(thread->L) - 1)) {
-	case 0:
-		unregister_thread(vm, thread);
-		break;
-	case LUA_YIELD: {
-		if(lua_type(thread->L, 1) == LUA_TNIL) {
-			print_warning(thread->L, "attempted to yield nil");
-		} else if(lua_type(thread->L, 1) == LUA_TTABLE) {
-			/* sleep on an event */
-			Event *ev;
-			
-			lua_pushstring(thread->L, "obj");
-			lua_rawget(thread->L, 1);
-			ev = lua_touserdata(thread->L, -1);
-			lua_pop(thread->L, 1);
-			
-			if(ev == NULL) {
-				print_warning(thread->L, "attempted to yield something not an event or duration");
-				break;
-			}
-			
-			queue_insert(ev->waiting, ev->next_pri++, thread);
-			vm->num_sleeping_threads++;
-			
-			/* for when they resume */
-			lua_pushvalue(thread->L, 1);
-		} else {
-			/* yield some samples */
-			
-			lua_Number amount = luaL_checknumber(thread->L, -1);
-			if(amount > 0)
-				thread->now += amount;
-			
-			queue_insert(vm->queue, thread->now, thread);
-			
-			/* for when they resume */
-			lua_pushvalue(thread->L, 1);
-		}
-		
-		break;
-	}
-	case LUA_ERRRUN:
-		print_warning(thread->L, "runtime error: %s", lua_tostring(thread->L, -1));
-		unregister_thread(vm, thread);
-		break;
-	case LUA_ERRMEM:
-		print_warning(thread->L, "memory allocation error");
-		unregister_thread(vm, thread);
-		break;
-	}
-}
-
-static
-void
-run(VM *vm)
-{
-	/* note: will exit when all threads have died OR are asleep */
-	while(vm->running && !queue_empty(vm->queue))
-		run_one(vm);
-}
-
-static
-void
-render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
-             double streamTime, void *userData)
-{
-	VM *vm = (VM *)userData;
-	unsigned int i;
-	int counter, dac, dac_tick, adc, bh, bh_tick;
-	
-	pthread_mutex_unlock(&vm->in_use);
-	
-	counter = 1;
-	lua_getglobal(vm->L, "dac"); dac = counter++;
-	lua_getfield(vm->L, -1, "tick"); dac_tick = counter++;
-	lua_getglobal(vm->L, "adc"); adc = counter++;
-	lua_getglobal(vm->L, "blackhole"); bh = counter++;
-	lua_getfield(vm->L, -1, "tick"); bh_tick = counter++;
-	
-	for(i = 0; i < nFrames; i++) {
-		if(vm->main_thread.now < vm->audio_now) {
-			while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < vm->audio_now) {
-				if(!vm->running) {
-					for(; i < nFrames; i++) {
-						outputBuffer[i * 2] = 0;
-						outputBuffer[i * 2 + 1] = 0;
-					}
-					
-					break;
-				}
-				
-				run_one(vm);
-			}
-			
-			if(!vm->running)
-				break;
-			
-			vm->main_thread.now = vm->audio_now;
-		}
-		
-		/* set mic sample */
-		lua_pushnumber(vm->L, inputBuffer[i]);
-		lua_setfield(vm->L, adc, "next");
-		
-		/* tick blackhole */
-		lua_pushvalue(vm->L, bh_tick);
-		lua_pushvalue(vm->L, bh);
-		lua_call(vm->L, 1, 0 /* ignore sample */);
-		
-		/* tick dac */
-		lua_pushvalue(vm->L, dac_tick);
-		lua_pushvalue(vm->L, dac);
-		lua_call(vm->L, 1, 1);
-		outputBuffer[i * 2] = lua_tonumber(vm->L, -1);
-		outputBuffer[i * 2 + 1] = outputBuffer[i * 2];
-		lua_pop(vm->L, 1);
-		
-		vm->audio_now++;
-	}
-	
-	lua_pop(vm->L, counter - 1); /* pop stuff pushed at beginning of function */
-	
-	pthread_mutex_unlock(&vm->in_use);
-}
-
-int
-main(int argc, const char *argv[])
-{
-	VM vm;
-	int i, c;
-	int num_scripts;
-	
-	int silent_mode = 0; /* whether to execute without using the sound card */
-	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
-	
-	while((c = getopt(argc, (char ** const) argv, "hsa")) != -1)
-		switch(c) {
-		case 'h':
-			usage();
-			return EXIT_SUCCESS;
-		case 's':
-			silent_mode = 1;
-			break;
-		case 'a':
-			all_libs = 1;
-			break;
-		}
-	
-	num_scripts = argc - optind;
-	
-	if(!init_vm(&vm, all_libs)) {
-		fprintf(stderr, "[ckv] could not initialize VM\n");
-		return EXIT_FAILURE;
-	}
-	
-	for(i = optind; i < argc; i++) {
-		Thread *thread = new_thread(vm.L, 0, &vm);
-		prepenv(&vm, thread->L);
-		
-		switch(luaL_loadfile(thread->L, argv[i])) {
-		case LUA_ERRSYNTAX:
-			fprintf(stderr, "[ckv] %s\n", lua_tostring(thread->L, -1));
-			break;
-		case LUA_ERRMEM:
-			fprintf(stderr, "[ckv] %s: memory allocation error while loading script\n", argv[i]);
-			break;
-		case LUA_ERRFILE:
-			fprintf(stderr, "[ckv] %s: cannot open file\n", argv[i]);
-			break;
-		default:
-			if(!queue_insert(vm.queue, 0, thread))
-				fprintf(stderr, "[ckv] %s: could not add to thread queue\n", argv[i]);
-		}
-	}
-	
-	if(queue_empty(vm.queue))
-		return num_scripts == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
-	
-	if(silent_mode) {
-		
-		run(&vm);
-		
-	} else {
-		
-		vm.use_lock = 1;
-		
-		pthread_mutex_init(&vm.in_use, NULL /* attr */);
-		
-		pthread_mutex_init(&vm.audio_done, NULL /* attr */);
-		pthread_mutex_lock(&vm.audio_done);
-		
-		if(!start_audio(render_audio, vm.sample_rate, &vm)) {
-			fprintf(stderr, "[ckv] could not start audio\n");
-			return EXIT_FAILURE;
-		}
-		
-		/* wait for audio to finish */
-		/* ugh, but there's a race here */
-		pthread_mutex_lock(&vm.audio_done);
-		
-		stop_audio();
-		
-		/* get exclusive access to the VM (never unlocked, 'cause we're quitting) */
-		pthread_mutex_lock(&vm.in_use);
-		
-	}
-	
-	/* ensure userdata garbage collection routines are called */
-	/* we should unregister all threads before doing this so threads are GC'd too */
-	lua_gc(vm.L, LUA_GCCOLLECT, 0);
-	
-	close_vm(&vm);
-	
-	return EXIT_SUCCESS;
-}
-
-/* non-static functions mostly for calling from ckvlib */
-
-static
-Thread *
-get_thread(lua_State *L)
-{
-	Thread *thread;
-	
-	lua_pushlightuserdata(L, L);
-	lua_gettable(L, LUA_REGISTRYINDEX);
-	thread = lua_touserdata(L, -1);
-	lua_pop(L, 1);
-	return thread;
-}
-
-static
-int
-ckv_now(lua_State *L)
-{
-	lua_pushnumber(L, get_thread(L)->now);
-	return 1;
-}
-
-static
-int
-ckv_exit(lua_State *L)
-{
-	VM *vm = get_thread(L)->vm;
-	
-	if(vm->running) {
-		vm->running = 0;
-		
-		if(vm->use_lock)
-			pthread_mutex_unlock(&vm->audio_done);
-	}
-	
-	lua_pushnumber(L, 0);
-	return lua_yield(L, 1);
-}
-
-static
-int
-ckv_fork(lua_State *L)
-{
-	Thread *parent = get_thread(L);
-	
-	Thread *thread = new_thread(parent->L, parent->now, parent->vm);
-	if(!thread) {
-		print_warning(parent->L, "could not allocate child thread");
-		return 0;
-	}
-	
-	lua_xmove(parent->L, thread->L, lua_gettop(parent->L)); /* move function and args over */
-	
-	if(!queue_insert(parent->vm->queue, thread->now, thread))
-		print_warning(parent->L, "could not enqueue child thread");
-	
-	return 0;
-}
-
-static
-int
-ckv_fork_eval(lua_State *L)
-{
-	Thread *parent = get_thread(L);
-	const char *code = luaL_checkstring(parent->L, -1);
-	
-	Thread *thread = new_thread(parent->L, parent->now, parent->vm);
-	if(!thread) {
-		print_warning(parent->L, "could not allocate child thread");
-		return 0;
-	}
-	
-	switch(luaL_loadstring(thread->L, code)) {
-	case LUA_ERRSYNTAX:
-		print_warning(parent->L, "could not create thread: %s", lua_tostring(thread->L, -1));
-		free(thread);
-		break;
-	case LUA_ERRMEM:
-		print_warning(parent->L, "could not create thread: memory allocation error");
-		free(thread);
-		break;
-	default:
-		if(!queue_insert(parent->vm->queue, thread->now, thread))
-			print_warning(parent->L, "could not enqueue child thread");
-	}
-	
-	return 0;
-}
-
-static
-int
-ckv_yield(lua_State *L)
-{
-	return lua_yield(L, lua_gettop(L));
-}
-
-static
-int
-ckv_event_broadcast(lua_State *L)
-{
-	double now;
-	Event *ev;
-	
-	luaL_checktype(L, 1, LUA_TTABLE); /* event */
-	now = get_thread(L)->now;
-	
-	lua_getfield(L, 1, "obj");
-	ev = lua_touserdata(L, -1);
-	lua_pop(L, 1);
-	
-	while(!queue_empty(ev->waiting)) {
-		Thread *thread = remove_queue_min(ev->waiting);
-		thread->now = now;
-		queue_insert(thread->vm->queue, thread->now, thread);
-		thread->vm->num_sleeping_threads--;
-	}
-	
-	return 0;
-}
-
-static
-int
-ckv_event_new(lua_State *L)
-{
-	Event *ev;
-	
-	luaL_checktype(L, 1, LUA_TTABLE); /* Event */
-	
-	ev = malloc(sizeof(Event));
-	if(ev == NULL) {
-		lua_pushnil(L);
-		return 1;
-	}
-	
-	ev->waiting = new_queue(1);
-	if(ev->waiting == NULL) {
-		free(ev);
-		lua_pushnil(L);
-		return 1;
-	}
-	
-	ev->next_pri = 0;
-	
-	/* our new_event object */
-	lua_createtable(L, 0 /* array items */, 1 /* non-array items */);
-	
-	lua_pushstring(L, "obj");
-	lua_pushlightuserdata(L, ev);
-	lua_rawset(L, -3);
-	
-	lua_pushcfunction(L, ckv_event_broadcast);
-	lua_setfield(L, -2, "broadcast");
-	
-	return 1;
-}
-
-/* opens ckv functions */
-static
-int
-open_ckv(lua_State *L) {
-	lua_register(L, "now", ckv_now);
-	lua_register(L, "exit", ckv_exit);
-	lua_register(L, "fork", ckv_fork);
-	lua_register(L, "fork_eval", ckv_fork_eval);
-	lua_register(L, "yield", ckv_yield);
-	lua_register(L, "sleep", ckv_yield);
-	
-	/* Event */
-	lua_createtable(L, 0 /* array items */, 1 /* non-array items */);
-	lua_pushcfunction(L, ckv_event_new); lua_setfield(L, -2, "new");
-	lua_setglobal(L, "Event"); /* pops */
+	lua_pushcfunction(L, luaopen_string); lua_call(L, 0, 0);
+	lua_pushcfunction(L, luaopen_table); lua_call(L, 0, 0);
+	lua_pushcfunction(L, luaopen_math); lua_call(L, 0, 0);
+	lua_gc(L, LUA_GCRESTART, 0);
 	
 	/* import math.random */
 	lua_getglobal(L, "math");
@@ -682,24 +81,185 @@ open_ckv(lua_State *L) {
 	"function usually() return random() < 0.9 end "
 	);
 	
-	(void) luaL_dostring(L,
-	"forever = Event:new()"
-	);
-	
 	/* seed the random number generator */
 	lua_getglobal(L, "math");
 	lua_getfield(L, -1, "randomseed");
 	lua_pushnumber(L, time(NULL));
 	lua_call(L, 1, 0);
 	lua_pop(L, 1); /* pop math */
-	
-	return 1;
 }
 
+static
 void
-pushstdglobal(lua_State *L, const char *name)
+open_audio_libs(VM *vm)
 {
-	Thread *thread = get_thread(L);
-	lua_getglobal(thread->vm->L, name);
-	lua_xmove(thread->vm->L, L, 1);
+	lua_State *L = ckvm_global_state(vm->ckvm);
+	
+	lua_gc(L, LUA_GCSTOP, 0); /* stop collector during initialization */
+	lua_pushcfunction(L, open_ckvugen); lua_call(L, 0, 0);
+	lua_gc(L, LUA_GCRESTART, 0);
+	
+	/* set the sample rate */
+	lua_pushnumber(L, vm->sample_rate);
+	lua_setglobal(L, "sample_rate");
+	
+	/* set duration helper variables */
+	lua_pushnumber(L, 1);
+	lua_pushnumber(L, 1);
+	lua_setglobal(L, "sample");
+	lua_setglobal(L, "samples");
+	lua_pushnumber(L, vm->sample_rate / 1000.0);
+	lua_setglobal(L, "ms");
+	lua_pushnumber(L, vm->sample_rate);
+	lua_pushnumber(L, vm->sample_rate);
+	lua_setglobal(L, "second");
+	lua_setglobal(L, "seconds");
+	lua_pushnumber(L, vm->sample_rate * 60);
+	lua_pushnumber(L, vm->sample_rate * 60);
+	lua_setglobal(L, "minute");
+	lua_setglobal(L, "minutes");
+	lua_pushnumber(L, vm->sample_rate * 60 * 60);
+	lua_pushnumber(L, vm->sample_rate * 60 * 60);
+	lua_setglobal(L, "hour");
+	lua_setglobal(L, "hours");
+	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24);
+	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24);
+	lua_setglobal(L, "day");
+	lua_setglobal(L, "days");
+	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24 * 7);
+	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24 * 7);
+	lua_setglobal(L, "week");
+	lua_setglobal(L, "weeks");
+	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24 * 7 * 2);
+	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24 * 7 * 2);
+	lua_setglobal(L, "fortnight");
+	lua_setglobal(L, "fortnights");
+}
+
+int
+main(int argc, char *argv[])
+{
+	VM vm;
+	int i, c;
+	int num_scripts, scripts_added;
+	int silent_mode = 0; /* whether to execute without using the sound card */
+	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
+	
+	vm.running = 1;
+	vm.audio_now = 0;
+	vm.sample_rate = 44100;
+	vm.channels = 2;
+	
+	vm.ckvm = ckvm_create(error_callback);
+	if(vm.ckvm == NULL) {
+		print_error("could not initialize VM");
+		return EXIT_FAILURE;
+	}
+	
+	while((c = getopt(argc, (char ** const) argv, "hsa")) != -1)
+		switch(c) {
+		case 'h':
+			usage();
+			return EXIT_SUCCESS;
+		case 's':
+			silent_mode = 1;
+			break;
+		case 'a':
+			all_libs = 1;
+			break;
+		}
+	
+	open_base_libs(&vm, all_libs);
+	open_audio_libs(&vm);
+	
+	num_scripts = argc - optind;
+	
+	scripts_added = 0;
+	for(i = optind; i < argc; i++)
+		if(ckvm_add_thread(vm.ckvm, argv[i]))
+			scripts_added++;
+	
+	if(scripts_added == 0 && silent_mode)
+		return num_scripts == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+	
+	if(silent_mode) {
+		
+		ckvm_run(vm.ckvm);
+		
+	} else {
+		
+		pthread_mutex_init(&vm.audio_done, NULL /* attr */);
+		pthread_mutex_lock(&vm.audio_done);
+		
+		if(!start_audio(render_audio, vm.sample_rate, &vm)) {
+			fprintf(stderr, "[ckv] could not start audio\n");
+			return EXIT_FAILURE;
+		}
+		
+		/* wait for audio to finish */
+		/* ugh, but there's a race here */
+		pthread_mutex_lock(&vm.audio_done);
+		
+		stop_audio();
+		
+	}
+	
+	ckvm_destroy(vm.ckvm);
+	
+	return EXIT_SUCCESS;
+}
+
+static
+void
+render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
+             double streamTime, void *userData)
+{
+	VM *vm = (VM *)userData;
+	lua_State *L;
+	unsigned int i;
+	int counter, dac, dac_tick, adc, bh, bh_tick;
+	
+	L = ckvm_global_state(vm->ckvm);
+	
+	counter = 1;
+	lua_getglobal(L, "dac"); dac = counter++;
+	lua_getfield(L, -1, "tick"); dac_tick = counter++;
+	lua_getglobal(L, "adc"); adc = counter++;
+	lua_getglobal(L, "blackhole"); bh = counter++;
+	lua_getfield(L, -1, "tick"); bh_tick = counter++;
+	
+	for(i = 0; i < nFrames; i++) {
+		ckvm_run_until(vm->ckvm, vm->audio_now);
+		
+		if(!vm->running) {
+			for(; i < nFrames; i++) {
+				outputBuffer[i * 2] = 0;
+				outputBuffer[i * 2 + 1] = 0;
+			}
+			
+			goto bail;
+		}
+		
+		/* set mic sample */
+		lua_pushnumber(L, inputBuffer[i]);
+		lua_setfield(L, adc, "next");
+		
+		/* tick blackhole */
+		lua_pushvalue(L, bh_tick);
+		lua_pushvalue(L, bh);
+		lua_call(L, 1, 0 /* ignore sample */);
+		
+		/* tick dac */
+		lua_pushvalue(L, dac_tick);
+		lua_pushvalue(L, dac);
+		lua_call(L, 1, 1);
+		outputBuffer[i * 2] = lua_tonumber(L, -1);
+		outputBuffer[i * 2 + 1] = outputBuffer[i * 2];
+		lua_pop(L, 1);
+		
+		vm->audio_now++;
+	}
+	
+bail:
+	lua_pop(L, counter - 1); /* pop stuff pushed at beginning of function */
 }
