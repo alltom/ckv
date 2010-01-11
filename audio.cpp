@@ -14,7 +14,7 @@ render(void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
        double streamTime, RtAudioStreamStatus status, void *userData)
 {
 	if(status)
-		std::cerr << "Stream underflow detected!" << std::endl;
+		std::cerr << "[ckv] Stream underflow detected!" << std::endl;
 	
 	callback((double *)outputBuffer, (double *)inputBuffer, nBufferFrames, streamTime, userData);
 
