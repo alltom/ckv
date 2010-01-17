@@ -11,13 +11,16 @@
 --
 --
 -- INSTALL:
--- 
+--
+--   detailed installation instructions are in the tutorial:
+--     http://ckvlang.org/tutorial.html
+--
+--   but for advanced users, this is all you need to know:
+--
 --   Dependencies:
 --    LUA: download, build, and "make install"
 --      http://www.lua.org/
---    (or, on 32-bit systems, try LuaJIT for extra speed:
---     http://luajit.org/luajit.html)
--- 
+--
 --    RTAUDIO: download, build, then
 --             copy librtaudio.a to /usr/local/lib/
 --                  RtAudio.h    to /usr/local/include/
@@ -26,7 +29,7 @@
 --
 --    FFMPEG: download, build, and "make install"
 --      http://ffmpeg.org/
--- 
+--
 --   ckv:
 --     $ make
 --     $ ./ckv -h
