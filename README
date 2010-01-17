@@ -44,13 +44,8 @@ Noise = {
   new = function(class, gain)
     return UGen.initialize_io({
       gain = gain or 1.0,
-      last_value = 0.0,
       tick = function(self)
-        if not(now() == self.last_tick) then
-          self.last_value = (math.random() * 2.0 - 1.0) * self.gain;
-          self.last_tick = now();
-        end
-        return self.last_value
+        self.last = (math.random() * 2.0 - 1.0) * self.gain;
       end
     })
   end

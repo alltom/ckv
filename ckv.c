@@ -217,16 +217,29 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	VM *vm = (VM *)userData;
 	lua_State *L;
 	unsigned int i;
-	int counter, dac, dac_tick, adc, bh, bh_tick;
+	int adc, dac, sinks, ugen_graph, tick_all;
 	
 	L = ckvm_global_state(vm->ckvm);
 	
-	counter = 1;
-	lua_getglobal(L, "dac"); dac = counter++;
-	lua_getfield(L, -1, "tick"); dac_tick = counter++;
-	lua_getglobal(L, "adc"); adc = counter++;
-	lua_getglobal(L, "blackhole"); bh = counter++;
-	lua_getfield(L, -1, "tick"); bh_tick = counter++;
+	lua_getglobal(L, "adc");
+	adc = lua_gettop(L);
+	
+	lua_getglobal(L, "dac");
+	dac = lua_gettop(L);
+	
+	/* sinks */
+	lua_createtable(L, 2 /* array */, 0 /* non-array */);
+	lua_getglobal(L, "dac");
+	lua_rawseti(L, -2, 1);
+	lua_getglobal(L, "blackhole");
+	lua_rawseti(L, -2, 2);
+	sinks = lua_gettop(L);
+	
+	lua_getfield(L, LUA_REGISTRYINDEX, "ugen_graph");
+	ugen_graph = lua_gettop(L);
+	
+	lua_getfield(L, ugen_graph, "tick_all");
+	tick_all = lua_gettop(L);
 	
 	for(i = 0; i < nFrames; i++) {
 		ckvm_run_until(vm->ckvm, vm->audio_now);
@@ -244,15 +257,14 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 		lua_pushnumber(L, inputBuffer[i]);
 		lua_setfield(L, adc, "next");
 		
-		/* tick blackhole */
-		lua_pushvalue(L, bh_tick);
-		lua_pushvalue(L, bh);
-		lua_call(L, 1, 0 /* ignore sample */);
+		/* tick all ugens */
+		lua_pushvalue(L, tick_all);
+		lua_pushvalue(L, ugen_graph);
+		lua_pushvalue(L, sinks);
+		lua_call(L, 2, 0);
 		
-		/* tick dac */
-		lua_pushvalue(L, dac_tick);
-		lua_pushvalue(L, dac);
-		lua_call(L, 1, 1);
+		/* sweet, audio => speaker */
+		lua_getfield(L, dac, "last");
 		outputBuffer[i * 2] = lua_tonumber(L, -1);
 		outputBuffer[i * 2 + 1] = outputBuffer[i * 2];
 		lua_pop(L, 1);
@@ -261,5 +273,5 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	}
 	
 bail:
-	lua_pop(L, counter - 1); /* pop stuff pushed at beginning of function */
+	lua_settop(L, 0); /* reset stack to empty */
 }

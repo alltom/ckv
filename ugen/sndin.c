@@ -137,8 +137,7 @@ ckv_sndin_tick(lua_State *L)
 	luaL_checktype(L, 1, LUA_TTABLE);
 	
 	SndIn *sndin;
-	lua_Number last_tick, last_value;
-	double tnow;
+	lua_Number last_value;
 	
 	lua_getfield(L, -1, "obj");
 	sndin = lua_touserdata(L, -1);
@@ -149,38 +148,20 @@ ckv_sndin_tick(lua_State *L)
 		return 1;
 	}
 	
-	lua_getfield(L, -1, "last_tick");
-	last_tick = lua_tonumber(L, -1);
-	lua_pop(L, 1);
-	
-	lua_getglobal(L, "now");
-	lua_call(L, 0, 1);
-	tnow = lua_tonumber(L, -1);
-	lua_pop(L, 1);
-	
-	if(tnow > last_tick) {
-		lua_pushnumber(L, tnow);
-		lua_setfield(L, 1, "last_tick");
-		
-		if(sndin->audio_buf_ptr == sndin->curr_buf_count)
-			sndin_get_samples(sndin);
-		if(sndin->audio_buf_ptr == sndin->curr_buf_count) {
-			/* ran out of data */
-			sndin_close(sndin);
-			last_value = 0;
-		} else {
-			last_value = sndin->audio_buf[sndin->audio_buf_ptr++] / 32767.0;
-		}
-		
-		lua_pushnumber(L, last_value);
-		lua_setfield(L, 1, "last_value");
-		
-		lua_pushnumber(L, last_value);
+	if(sndin->audio_buf_ptr == sndin->curr_buf_count)
+		sndin_get_samples(sndin);
+	if(sndin->audio_buf_ptr == sndin->curr_buf_count) {
+		/* ran out of data */
+		sndin_close(sndin);
+		last_value = 0;
 	} else {
-		lua_getfield(L, 1, "last_value");
+		last_value = sndin->audio_buf[sndin->audio_buf_ptr++] / 32767.0;
 	}
 	
-	return 1;
+	lua_pushnumber(L, last_value);
+	lua_setfield(L, 1, "last");
+	
+	return 0;
 }
 
 /* args: self */
@@ -267,10 +248,6 @@ ckv_sndin_new(lua_State *L)
 	lua_pop(L, 1);
 	lua_pushnumber(L, sndin->pFormatCtx->duration / 1000000.0 * sample_rate);
 	lua_setfield(L, -2, "duration");
-	
-	/* self.last_tick = -1 */
-	lua_pushnumber(L, -1);
-	lua_setfield(L, -2, "last_tick");
 	
 	/* add sndin methods */
 	luaL_register(L, NULL, ckvugen_sndin);

@@ -19,8 +19,7 @@ int
 ckv_delay_tick(lua_State *L)
 {
 	Delay *delay;
-	lua_Number last_tick, last_value, sample;
-	double tnow;
+	lua_Number last_value, sample;
 	int i;
 	
 	luaL_checktype(L, 1, LUA_TTABLE);
@@ -29,49 +28,31 @@ ckv_delay_tick(lua_State *L)
 	delay = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
-	lua_getfield(L, -1, "last_tick");
-	last_tick = lua_tonumber(L, -1);
-	lua_pop(L, 1);
+	last_value = 0.0;
+	if(delay->ptr - delay->delay_length >= 0)
+		last_value = delay->buffer[delay->ptr - delay->delay_length];
 	
-	lua_getglobal(L, "now");
-	lua_call(L, 0, 1);
-	tnow = lua_tonumber(L, -1);
-	lua_pop(L, 1);
+	/* get the latest input sample */
+	pushstdglobal(L, "UGen");
+	lua_getfield(L, -1, "sum_inputs");
+	lua_pushvalue(L, 1);
+	lua_call(L, 1, 1);
+	sample = lua_tonumber(L, -1);
+	lua_pop(L, 2); /* pop sample and UGen */
 	
-	if(tnow > last_tick) {
-		lua_pushnumber(L, tnow);
-		lua_setfield(L, 1, "last_tick");
-		
-		last_value = 0.0;
-		if(delay->ptr - delay->delay_length >= 0)
-			last_value = delay->buffer[delay->ptr - delay->delay_length];
-		
-		/* get the latest input sample */
-		pushstdglobal(L, "UGen");
-		lua_getfield(L, -1, "sum_inputs");
-		lua_pushvalue(L, 1);
-		lua_call(L, 1, 1);
-		sample = lua_tonumber(L, -1);
-		lua_pop(L, 2); /* pop sample and UGen */
-		
-		/* if we've reached the end of the buffer, move everything to the beginning */
-		if(delay->ptr == delay->size) {
-			for(i = 0; i < delay->delay_length; i++)
-				delay->buffer[i] = delay->buffer[delay->size - 1 - delay->delay_length + i];
-			delay->ptr = delay->delay_length;
-		}
-		
-		delay->buffer[delay->ptr++] = sample;
-		
-		lua_pushnumber(L, last_value);
-		lua_setfield(L, 1, "last_value");
-		
-		lua_pushnumber(L, last_value);
-	} else {
-		lua_getfield(L, 1, "last_value");
+	/* if we've reached the end of the buffer, move everything to the beginning */
+	if(delay->ptr == delay->size) {
+		for(i = 0; i < delay->delay_length; i++)
+			delay->buffer[i] = delay->buffer[delay->size - 1 - delay->delay_length + i];
+		delay->ptr = delay->delay_length;
 	}
 	
-	return 1;
+	delay->buffer[delay->ptr++] = sample;
+	
+	lua_pushnumber(L, last_value);
+	lua_setfield(L, 1, "last");
+	
+	return 0;
 }
 
 /* args: delay obj */
@@ -142,10 +123,6 @@ ckv_delay_new(lua_State *L)
 	lua_setfield(L, -2, "__gc");
 	lua_setmetatable(L, -2);
 	lua_setfield(L, -2, "obj");
-	
-	/* self.last_tick = -1 */
-	lua_pushnumber(L, -1);
-	lua_setfield(L, -2, "last_tick");
 	
 	/* add delay methods */
 	luaL_register(L, NULL, ckvugen_delay);
