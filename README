@@ -42,12 +42,12 @@
 --   http://lua-users.org/wiki/ObjectOrientedProgramming
 Noise = {
   new = function(class, gain)
-    return UGen.initialize_io({
+    return {
       gain = gain or 1.0,
       tick = function(self)
         self.last = (math.random() * 2.0 - 1.0) * self.gain;
       end
-    })
+    }
   end
 }
 

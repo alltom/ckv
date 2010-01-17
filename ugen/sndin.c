@@ -252,13 +252,6 @@ ckv_sndin_new(lua_State *L)
 	/* add sndin methods */
 	luaL_register(L, NULL, ckvugen_sndin);
 	
-	/* UGen.initialize_io(self) */
-	lua_getfield(L, LUA_GLOBALSINDEX, "UGen");
-	lua_getfield(L, -1, "initialize_io");
-	lua_pushvalue(L, -3); /* self */
-	lua_call(L, 1, 0);
-	lua_pop(L, 1); /* pop UGen */
-	
 	return 1; /* return self */
 }
 

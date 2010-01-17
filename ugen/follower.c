@@ -10,7 +10,7 @@ open_ugen_follower(lua_State *L)
 	(void) luaL_dostring(L,
 	"Follower = {"
 	" new = function(class, half_life)"
-	"  return UGen.initialize_io({"
+	"  return {"
 	"   decay = math.exp(math.log(0.5) / (half_life or (sample_rate / 16.))),"
 	"   tick = function(self)"
 	"    local in_sample = math.abs(UGen.sum_inputs(self));"
@@ -20,7 +20,7 @@ open_ugen_follower(lua_State *L)
 	"     self.last = self.last * self.decay"
 	"    end"
 	"   end"
-	"  })"
+	"  }"
 	" end"
 	"}"
 	);

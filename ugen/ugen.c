@@ -20,48 +20,6 @@ lua_CFunction ugens[] = {
 
 /* UGen HELPER FUNCTIONS */
 
-/* args: self */
-static
-int
-ckv_ugen_initialize_io(lua_State *L)
-{
-	luaL_checktype(L, 1, LUA_TTABLE);
-	
-	/* self.inputs = {}; */
-	lua_newtable(L);
-	lua_setfield(L, 1, "inputs");
-	
-	/* UGen.create_input(self, "default"); */
-	lua_getfield(L, LUA_GLOBALSINDEX, "UGen");
-	lua_getfield(L, -1, "create_input"); /* function */
-	lua_pushvalue(L, 1); /* self */
-	lua_pushstring(L, "default");
-	lua_call(L, 2, 0);
-	
-	lua_pushvalue(L, 1); /* self */
-	return 1; /* return self */
-}
-
-/* args: self, name */
-static
-int
-ckv_ugen_create_input(lua_State *L)
-{
-	const char *port;
-	
-	luaL_checktype(L, 1, LUA_TTABLE);
-	port = luaL_checkstring(L, 2);
-	
-	/* self.inputs[name] = {}; */
-	lua_getfield(L, 1, "inputs");
-	lua_newtable(L);
-	lua_setfield(L, -2, port);
-	
-	/* return self; */
-	lua_pushvalue(L, 1);
-	return 1;
-}
-
 /* args: ugen, port */
 static
 int
@@ -180,8 +138,6 @@ open_ckvugen(lua_State *L) {
 	
 	/* UGen */
 	lua_createtable(L, 0, 3 /* estimated number of functions */);
-	lua_pushcfunction(L, ckv_ugen_initialize_io); lua_setfield(L, -2, "initialize_io");
-	lua_pushcfunction(L, ckv_ugen_create_input);  lua_setfield(L, -2, "create_input");
 	lua_pushcfunction(L, ckv_ugen_sum_inputs);    lua_setfield(L, -2, "sum_inputs");
 	lua_setglobal(L, "UGen");
 	
