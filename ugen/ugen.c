@@ -143,6 +143,7 @@ open_ckvugen(lua_State *L) {
 	
 	/* connect & disconnect */
 	lua_pushcfunction(L, ckv_connect); lua_setglobal(L, "connect");
+	lua_pushcfunction(L, ckv_connect); lua_setglobal(L, "c");
 	lua_pushcfunction(L, ckv_disconnect); lua_setglobal(L, "disconnect");
 	
 	/* unit generator graph & functions */
