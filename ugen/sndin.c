@@ -16,7 +16,7 @@ typedef struct SndIn {
 	int audioStream; /* which stream is audio */
 	int16_t audio_buf[(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE) / sizeof(int16_t)];
 	int curr_buf_count; /* number of samples currently in buffer */
-	int audio_buf_ptr; /* next sample to read from buffer */
+	float audio_buf_ptr; /* next sample to read from buffer */
 	int eof, closed;
 } SndIn;
 
@@ -109,7 +109,7 @@ sndin_get_samples(SndIn *sndin)
 				sndin->curr_buf_count = frames;
 			}
 			
-			sndin->audio_buf_ptr = 0;
+			sndin->audio_buf_ptr -= sndin->curr_buf_count;
 			return;
 		}
 	}
@@ -134,28 +134,36 @@ static
 int
 ckv_sndin_tick(lua_State *L)
 {
-	luaL_checktype(L, 1, LUA_TTABLE);
-	
 	SndIn *sndin;
 	lua_Number last_value;
+	float rate;
+	
+	luaL_checktype(L, 1, LUA_TTABLE);
 	
 	lua_getfield(L, -1, "obj");
 	sndin = lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
-	if(sndin->closed || sndin->eof) {
-		lua_pushnumber(L, 0);
-		return 1;
-	}
+	if(sndin->closed || sndin->eof)
+		return 0;
 	
-	if(sndin->audio_buf_ptr == sndin->curr_buf_count)
+	while(!sndin->eof && sndin->audio_buf_ptr >= sndin->curr_buf_count)
 		sndin_get_samples(sndin);
-	if(sndin->audio_buf_ptr == sndin->curr_buf_count) {
+	if(sndin->eof) {
 		/* ran out of data */
 		sndin_close(sndin);
 		last_value = 0;
 	} else {
-		last_value = sndin->audio_buf[sndin->audio_buf_ptr++] / 32767.0;
+		lua_getfield(L, -1, "rate");
+		rate = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+		if(rate < 0) {
+			fprintf(stderr, "[ckv] SndIn rate must be positive\n");
+			return 0;
+		}
+		
+		last_value = sndin->audio_buf[(int) sndin->audio_buf_ptr] / 32767.0;
+		sndin->audio_buf_ptr += rate;
 	}
 	
 	lua_pushnumber(L, last_value);
@@ -248,6 +256,10 @@ ckv_sndin_new(lua_State *L)
 	lua_pop(L, 1);
 	lua_pushnumber(L, sndin->pFormatCtx->duration / 1000000.0 * sample_rate);
 	lua_setfield(L, -2, "duration");
+	
+	/* self.rate = 1 */
+	lua_pushnumber(L, 1);
+	lua_setfield(L, -2, "rate");
 	
 	/* add sndin methods */
 	luaL_register(L, NULL, ckvugen_sndin);
