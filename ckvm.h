@@ -20,6 +20,7 @@ double ckvm_now(CKVM vm);
 void ckvm_run_one(CKVM vm);
 void ckvm_run_until(CKVM vm, double new_now);
 void ckvm_run(CKVM vm); /* runs 'til all threads die or fall asleep */
+int ckvm_running(CKVM vm);
 void ckvm_destroy(CKVM vm);
 
 #endif

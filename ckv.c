@@ -11,10 +11,10 @@
 
 typedef struct VM {
 	CKVM ckvm;
-	int running;
 	
 	unsigned int audio_now; /* used in audio callback; unused in silent mode */
-	pthread_mutex_t audio_done;
+	pthread_mutex_t audio_done_mutex;
+	pthread_cond_t audio_done;
 	int sample_rate;
 	int channels;
 } VM;
@@ -145,7 +145,6 @@ main(int argc, char *argv[])
 	int silent_mode = 0; /* whether to execute without using the sound card */
 	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
 	
-	vm.running = 1;
 	vm.audio_now = 0;
 	vm.sample_rate = 44100;
 	vm.channels = 2;
@@ -185,11 +184,14 @@ main(int argc, char *argv[])
 	if(silent_mode) {
 		
 		ckvm_run(vm.ckvm);
+		ckvm_destroy(vm.ckvm);
 		
 	} else {
 		
-		pthread_mutex_init(&vm.audio_done, NULL /* attr */);
-		pthread_mutex_lock(&vm.audio_done);
+		pthread_mutex_init(&vm.audio_done_mutex, NULL /* attr */);
+		pthread_cond_init(&vm.audio_done, NULL /* attr */);
+		
+		pthread_mutex_lock(&vm.audio_done_mutex);
 		
 		if(!start_audio(render_audio, vm.sample_rate, &vm)) {
 			fprintf(stderr, "[ckv] could not start audio\n");
@@ -197,14 +199,13 @@ main(int argc, char *argv[])
 		}
 		
 		/* wait for audio to finish */
-		/* ugh, but there's a race here */
-		pthread_mutex_lock(&vm.audio_done);
+		pthread_cond_wait(&vm.audio_done, &vm.audio_done_mutex);
+		pthread_mutex_unlock(&vm.audio_done_mutex);
 		
 		stop_audio();
+		ckvm_destroy(vm.ckvm);
 		
 	}
-	
-	ckvm_destroy(vm.ckvm);
 	
 	return EXIT_SUCCESS;
 }
@@ -218,6 +219,14 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	lua_State *L;
 	unsigned int i;
 	int adc, dac, sinks, ugen_graph, tick_all;
+	
+	if(!ckvm_running(vm->ckvm)) {
+		for(; i < nFrames; i++) {
+			outputBuffer[i * 2] = 0;
+			outputBuffer[i * 2 + 1] = 0;
+		}
+		return;
+	}
 	
 	L = ckvm_global_state(vm->ckvm);
 	
@@ -244,11 +253,15 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	for(i = 0; i < nFrames; i++) {
 		ckvm_run_until(vm->ckvm, vm->audio_now);
 		
-		if(!vm->running) {
+		if(!ckvm_running(vm->ckvm)) {
 			for(; i < nFrames; i++) {
 				outputBuffer[i * 2] = 0;
 				outputBuffer[i * 2 + 1] = 0;
 			}
+			
+			pthread_mutex_lock(&vm->audio_done_mutex);
+			pthread_cond_signal(&vm->audio_done);
+			pthread_mutex_unlock(&vm->audio_done_mutex);
 			
 			goto bail;
 		}

@@ -118,9 +118,6 @@ ckvm_create(ErrorCallback err_callback)
 lua_State *
 ckvm_global_state(CKVM vm)
 {
-	if(!vm->running)
-		return NULL;
-	
 	return vm->L;
 }
 
@@ -183,9 +180,6 @@ ckvm_remove_thrad(CKVM_Thread thread)
 double
 ckvm_now(CKVM vm)
 {
-	if(!vm->running)
-		return 0;
-	
 	return vm->main_thread.now;
 }
 
@@ -256,10 +250,7 @@ ckvm_run_one(CKVM vm)
 void
 ckvm_run_until(CKVM vm, double new_now)
 {
-	if(!vm->running)
-		return;
-	
-	while(!queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < new_now)
+	while(vm->running && !queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < new_now)
 		ckvm_run_one(vm);
 	
 	vm->main_thread.now = new_now;
@@ -270,6 +261,12 @@ ckvm_run(CKVM vm)
 {
 	while(vm->running && !queue_empty(vm->queue))
 		ckvm_run_one(vm);
+}
+
+int
+ckvm_running(CKVM vm)
+{
+	return vm->running;
 }
 
 void
