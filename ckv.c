@@ -118,13 +118,19 @@ main(int argc, char *argv[])
 			break;
 		}
 	
+	/* libraries must be loaded before any scripts which use them */
+	
 	open_base_libs(&vm, all_libs);
 	
-	vm.audio = ckva_open(vm.ckvm, 44100, 2);
-	if(vm.audio == NULL) {
-		print_error("could not initialize ckv audio");
-		return EXIT_FAILURE;
+	if(!silent_mode) {
+		vm.audio = ckva_open(vm.ckvm, 44100, 2);
+		if(vm.audio == NULL) {
+			print_error("could not initialize ckv audio");
+			return EXIT_FAILURE;
+		}
 	}
+	
+	/* load the scripts specified on the command-line */
 	
 	num_scripts = argc - optind;
 	
@@ -135,6 +141,8 @@ main(int argc, char *argv[])
 	
 	if(scripts_added == 0 && silent_mode)
 		return num_scripts == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+	
+	/* begin execution */
 	
 	if(silent_mode) {
 		
