@@ -3,11 +3,13 @@ CFLAGS = -g -ansi -pedantic -Wall -O3
 LDFLAGS = -llua
 LDFLAGS += -lrtaudio -framework CoreAudio -lpthread # audio
 LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lx264 # sndin
+LDFLAGS += -framework GLUT -framework OpenGL # opengl
 UGEN_OBJECTS=audio/ugen/delay.o audio/ugen/follower.o audio/ugen/gain.o \
              audio/ugen/impulse.o audio/ugen/noise.o audio/ugen/osc.o \
              audio/ugen/sndin.o audio/ugen/step.o audio/ugen/ugen.o
 AUDIO_OBJECTS=audio/audio.o $(UGEN_OBJECTS)
-OBJECTS = ckv.o ckvm.o luabaselite.o $(AUDIO_OBJECTS) rtaudio_wrapper.o pq.o
+OPENGL_OBJECTS=opengl/opengl.o
+OBJECTS = ckv.o ckvm.o luabaselite.o $(AUDIO_OBJECTS) $(OPENGL_OBJECTS) rtaudio_wrapper.o pq.o
 EXECUTABLE=ckv
 
 $(EXECUTABLE): $(OBJECTS)

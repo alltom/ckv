@@ -18,6 +18,9 @@ CKVAudio
 ckva_open(CKVM vm, int sample_rate, int channels)
 {
 	CKVAudio audio = malloc(sizeof(struct CKVAudio));
+	if(audio == NULL)
+		return NULL;
+
 	audio->vm = vm;
 	audio->now = (int) ckvm_now(vm);
 	audio->sample_rate = sample_rate;

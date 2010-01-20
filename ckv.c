@@ -2,7 +2,7 @@
 #include "ckv.h"
 #include "ckvm.h"
 #include "audio/audio.h"
-#include "pq.h"
+#include "opengl/opengl.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -158,6 +158,12 @@ main(int argc, char *argv[])
 		
 		if(!start_audio(render_audio, ckva_sample_rate(vm.audio), &vm)) {
 			print_error("could not start audio");
+			return EXIT_FAILURE;
+		}
+
+		CKVGL gl = ckvgl_open(vm.ckvm, 800, 600);
+		if(gl == NULL) {
+			print_error("could not start opengl");
 			return EXIT_FAILURE;
 		}
 		
