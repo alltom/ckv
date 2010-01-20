@@ -34,9 +34,9 @@
 --     $ make
 --     $ ./ckv -h
 --     $ ./ckv README
---     $ ./ckv ex01.ckv
---     $ ./ckv ex02.ckv
---     $ ./ckv ex03.ckv ex03a.ckv ex03b.ckv
+--     $ ./ckv ex/01.ckv
+--     $ ./ckv ex/02.ckv
+--     $ ./ckv ex/03.ckv ex/03a.ckv ex/03b.ckv
 
 -- EXECUTABLE SUMMARY (run this file)
 
