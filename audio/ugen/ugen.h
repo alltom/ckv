@@ -2,6 +2,10 @@
 #ifndef UGEN_H
 #define UGEN_H
 
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
+
 /* standard unit generators */
 int open_ugen_delay(lua_State *L);
 int open_ugen_follower(lua_State *L);

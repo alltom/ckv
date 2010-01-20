@@ -1,5 +1,4 @@
 
-#include "../ckv.h"
 #include "ugen.h"
 
 /* ugens to load */
@@ -138,11 +137,12 @@ open_ckvugen(lua_State *L) {
 	
 	/* UGen */
 	lua_createtable(L, 0, 3 /* estimated number of functions */);
-	lua_pushcfunction(L, ckv_ugen_sum_inputs);    lua_setfield(L, -2, "sum_inputs");
+	lua_pushcfunction(L, ckv_ugen_sum_inputs); lua_setfield(L, -2, "sum_inputs");
 	lua_setglobal(L, "UGen");
 	
 	/* connect & disconnect */
 	lua_pushcfunction(L, ckv_connect); lua_setglobal(L, "connect");
+	lua_pushcfunction(L, ckv_connect); lua_setglobal(L, "c");
 	lua_pushcfunction(L, ckv_disconnect); lua_setglobal(L, "disconnect");
 	
 	/* unit generator graph & functions */

@@ -3,18 +3,21 @@ CFLAGS = -g -ansi -pedantic -Wall -O3
 LDFLAGS = -llua
 LDFLAGS += -lrtaudio -framework CoreAudio -lpthread # audio
 LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lx264 # sndin
-UGEN_OBJECTS=ugen/delay.o ugen/follower.o ugen/gain.o ugen/impulse.o ugen/noise.o ugen/osc.o ugen/sndin.o ugen/step.o
-OBJECTS = ckv.o ckvm.o luabaselite.o ugen/ugen.o $(UGEN_OBJECTS) audio.o pq.o
+UGEN_OBJECTS=audio/ugen/delay.o audio/ugen/follower.o audio/ugen/gain.o \
+             audio/ugen/impulse.o audio/ugen/noise.o audio/ugen/osc.o \
+             audio/ugen/sndin.o audio/ugen/step.o audio/ugen/ugen.o
+AUDIO_OBJECTS=audio/audio.o $(UGEN_OBJECTS)
+OBJECTS = ckv.o ckvm.o luabaselite.o $(AUDIO_OBJECTS) rtaudio_wrapper.o pq.o
 EXECUTABLE=ckv
 
 $(EXECUTABLE): $(OBJECTS)
 	g++ $(LDFLAGS) $(OBJECTS) -o $@
 
-audio.o: audio.cpp
-	g++ $(CFLAGS) -c -o audio.o audio.cpp -D__MACOSX_CORE__
+rtaudio_wrapper.o: rtaudio_wrapper.cpp
+	g++ $(CFLAGS) -c -o rtaudio_wrapper.o rtaudio_wrapper.cpp -D__MACOSX_CORE__
 
-ugen/sndin.o: ugen/sndin.c
-	$(CC) -g -Wall -O3 -c -o ugen/sndin.o ugen/sndin.c
+audio/ugen/sndin.o: audio/ugen/sndin.c
+	$(CC) -g -Wall -O3 -c -o audio/ugen/sndin.o audio/ugen/sndin.c
 
 clean:
-	rm -f *.o */*.o $(EXECUTABLE)
+	rm -f *.o */*.o */*/*.o $(EXECUTABLE)

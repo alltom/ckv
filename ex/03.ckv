@@ -1,5 +1,5 @@
 
--- try it: ckv ex03.ckv ex03a.ckv ex03b.ckv
+-- try it: ckv 03.ckv 03a.ckv 03b.ckv
 
 global.fun_time = Event:new();
 

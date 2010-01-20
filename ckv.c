@@ -1,6 +1,7 @@
 
 #include "ckv.h"
 #include "ckvm.h"
+#include "audio/audio.h"
 #include "pq.h"
 
 #include <stdio.h>
@@ -11,12 +12,10 @@
 
 typedef struct VM {
 	CKVM ckvm;
+	CKVAudio audio;
 	
-	unsigned int audio_now; /* used in audio callback; unused in silent mode */
 	pthread_mutex_t audio_done_mutex;
 	pthread_cond_t audio_done;
-	int sample_rate;
-	int channels;
 } VM;
 
 static void render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames, double streamTime, void *userData);
@@ -89,53 +88,6 @@ open_base_libs(VM *vm, int all_libs)
 	lua_pop(L, 1); /* pop math */
 }
 
-static
-void
-open_audio_libs(VM *vm)
-{
-	lua_State *L = ckvm_global_state(vm->ckvm);
-	
-	lua_gc(L, LUA_GCSTOP, 0); /* stop collector during initialization */
-	lua_pushcfunction(L, open_ckvugen); lua_call(L, 0, 0);
-	lua_gc(L, LUA_GCRESTART, 0);
-	
-	/* set the sample rate */
-	lua_pushnumber(L, vm->sample_rate);
-	lua_setglobal(L, "sample_rate");
-	
-	/* set duration helper variables */
-	lua_pushnumber(L, 1);
-	lua_pushnumber(L, 1);
-	lua_setglobal(L, "sample");
-	lua_setglobal(L, "samples");
-	lua_pushnumber(L, vm->sample_rate / 1000.0);
-	lua_setglobal(L, "ms");
-	lua_pushnumber(L, vm->sample_rate);
-	lua_pushnumber(L, vm->sample_rate);
-	lua_setglobal(L, "second");
-	lua_setglobal(L, "seconds");
-	lua_pushnumber(L, vm->sample_rate * 60);
-	lua_pushnumber(L, vm->sample_rate * 60);
-	lua_setglobal(L, "minute");
-	lua_setglobal(L, "minutes");
-	lua_pushnumber(L, vm->sample_rate * 60 * 60);
-	lua_pushnumber(L, vm->sample_rate * 60 * 60);
-	lua_setglobal(L, "hour");
-	lua_setglobal(L, "hours");
-	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24);
-	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24);
-	lua_setglobal(L, "day");
-	lua_setglobal(L, "days");
-	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24 * 7);
-	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24 * 7);
-	lua_setglobal(L, "week");
-	lua_setglobal(L, "weeks");
-	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24 * 7 * 2);
-	lua_pushnumber(L, vm->sample_rate * 60 * 60 * 24 * 7 * 2);
-	lua_setglobal(L, "fortnight");
-	lua_setglobal(L, "fortnights");
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -145,15 +97,13 @@ main(int argc, char *argv[])
 	int silent_mode = 0; /* whether to execute without using the sound card */
 	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
 	
-	vm.audio_now = 0;
-	vm.sample_rate = 44100;
-	vm.channels = 2;
-	
 	vm.ckvm = ckvm_create(error_callback);
 	if(vm.ckvm == NULL) {
 		print_error("could not initialize VM");
 		return EXIT_FAILURE;
 	}
+	
+	vm.audio = NULL;
 	
 	while((c = getopt(argc, (char ** const) argv, "hsa")) != -1)
 		switch(c) {
@@ -169,7 +119,12 @@ main(int argc, char *argv[])
 		}
 	
 	open_base_libs(&vm, all_libs);
-	open_audio_libs(&vm);
+	
+	vm.audio = ckva_open(vm.ckvm, 44100, 2);
+	if(vm.audio == NULL) {
+		print_error("could not initialize ckv audio");
+		return EXIT_FAILURE;
+	}
 	
 	num_scripts = argc - optind;
 	
@@ -193,8 +148,8 @@ main(int argc, char *argv[])
 		
 		pthread_mutex_lock(&vm.audio_done_mutex);
 		
-		if(!start_audio(render_audio, vm.sample_rate, &vm)) {
-			fprintf(stderr, "[ckv] could not start audio\n");
+		if(!start_audio(render_audio, ckva_sample_rate(vm.audio), &vm)) {
+			print_error("could not start audio");
 			return EXIT_FAILURE;
 		}
 		
@@ -215,76 +170,22 @@ void
 render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
              double streamTime, void *userData)
 {
+	int i, c;
 	VM *vm = (VM *)userData;
-	lua_State *L;
-	unsigned int i;
-	int adc, dac, sinks, ugen_graph, tick_all;
 	
 	if(!ckvm_running(vm->ckvm)) {
-		for(; i < nFrames; i++) {
-			outputBuffer[i * 2] = 0;
-			outputBuffer[i * 2 + 1] = 0;
-		}
+		int channels = ckva_channels(vm->audio);
+		for(i = 0; i < nFrames; i++)
+			for(c = 0; c < channels; c++)
+				outputBuffer[i * channels + c] = 0;
 		return;
 	}
 	
-	L = ckvm_global_state(vm->ckvm);
+	ckva_fill_buffer(vm->audio, outputBuffer, inputBuffer, nFrames);
 	
-	lua_getglobal(L, "adc");
-	adc = lua_gettop(L);
-	
-	lua_getglobal(L, "dac");
-	dac = lua_gettop(L);
-	
-	/* sinks */
-	lua_createtable(L, 2 /* array */, 0 /* non-array */);
-	lua_getglobal(L, "dac");
-	lua_rawseti(L, -2, 1);
-	lua_getglobal(L, "blackhole");
-	lua_rawseti(L, -2, 2);
-	sinks = lua_gettop(L);
-	
-	lua_getfield(L, LUA_REGISTRYINDEX, "ugen_graph");
-	ugen_graph = lua_gettop(L);
-	
-	lua_getfield(L, ugen_graph, "tick_all");
-	tick_all = lua_gettop(L);
-	
-	for(i = 0; i < nFrames; i++) {
-		ckvm_run_until(vm->ckvm, vm->audio_now);
-		
-		if(!ckvm_running(vm->ckvm)) {
-			for(; i < nFrames; i++) {
-				outputBuffer[i * 2] = 0;
-				outputBuffer[i * 2 + 1] = 0;
-			}
-			
-			pthread_mutex_lock(&vm->audio_done_mutex);
-			pthread_cond_signal(&vm->audio_done);
-			pthread_mutex_unlock(&vm->audio_done_mutex);
-			
-			goto bail;
-		}
-		
-		/* set mic sample */
-		lua_pushnumber(L, inputBuffer[i]);
-		lua_setfield(L, adc, "next");
-		
-		/* tick all ugens */
-		lua_pushvalue(L, tick_all);
-		lua_pushvalue(L, ugen_graph);
-		lua_pushvalue(L, sinks);
-		lua_call(L, 2, 0);
-		
-		/* sweet, audio => speaker */
-		lua_getfield(L, dac, "last");
-		outputBuffer[i * 2] = lua_tonumber(L, -1);
-		outputBuffer[i * 2 + 1] = outputBuffer[i * 2];
-		lua_pop(L, 1);
-		
-		vm->audio_now++;
+	if(!ckvm_running(vm->ckvm)) {
+		pthread_mutex_lock(&vm->audio_done_mutex);
+		pthread_cond_signal(&vm->audio_done);
+		pthread_mutex_unlock(&vm->audio_done_mutex);
 	}
-	
-bail:
-	lua_settop(L, 0); /* reset stack to empty */
 }
