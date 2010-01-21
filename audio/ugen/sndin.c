@@ -288,7 +288,13 @@ ckv_sndin_play(lua_State *L)
 		return 0;
 	
 	pushstdglobal(L, "fork");
-	lua_getfield(L, 1, "__play_thread");
+	(void) luaL_dostring(L,
+	"return function(sndin, dest)"
+	"  connect(sndin, dest);"
+	"  yield(sndin.duration);"
+	"  disconnect(sndin, dest);"
+	"end"
+	);
 	lua_pushvalue(L, -3); /* SndIn created above */
 	lua_pushvalue(L, 3); /* dest ugen */
 	lua_call(L, 3 /* args */, 1 /* return values */);
@@ -301,19 +307,11 @@ ckv_sndin_play(lua_State *L)
 int
 open_ugen_sndin(lua_State *L)
 {
-	lua_createtable(L, 0, 2 /* estimated number of functions */);
-	lua_pushcfunction(L, ckv_sndin_new); lua_setfield(L, -2, "new");
-	lua_pushcfunction(L, ckv_sndin_play); lua_setfield(L, -2, "play");
-	lua_setglobal(L, "SndIn"); /* pops */
+	lua_pushcfunction(L, ckv_sndin_new);
+	lua_setglobal(L, "SndIn");
 	
-	/* this function is in Lua so that it can resume after yielding */
-	(void) luaL_dostring(L,
-	"SndIn.__play_thread = function(sndin, dest)"
-	"  connect(sndin, dest);"
-	"  yield(sndin.duration);"
-	"  disconnect(sndin, dest);"
-	"end"
-	);
+	lua_pushcfunction(L, ckv_sndin_play);
+	lua_setglobal(L, "play");
 	
 	return 0;
 }

@@ -134,9 +134,8 @@ ckv_delay_new(lua_State *L)
 int
 open_ugen_delay(lua_State *L)
 {
-	lua_createtable(L, 0, 1 /* estimated number of functions */);
-	lua_pushcfunction(L, ckv_delay_new); lua_setfield(L, -2, "new");
-	lua_setglobal(L, "Delay"); /* pops */
+	lua_pushcfunction(L, ckv_delay_new);
+	lua_setglobal(L, "Delay");
 	
 	return 0;
 }

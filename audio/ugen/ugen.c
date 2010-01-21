@@ -84,9 +84,21 @@ ckv_connect(lua_State *L) {
 	lua_getfield(L, -1, "connect");
 	connect = lua_gettop(L);
 	
+	if(lua_type(L, 1) == LUA_TFUNCTION) {
+		lua_pushvalue(L, 1);
+		lua_call(L, 0, 1);
+		lua_replace(L, 1);
+	}
+	
 	for(i = 1; i < nargs; i++) {
 		source = i;
 		dest = i + 1;
+		
+		if(lua_type(L, dest) == LUA_TFUNCTION) {
+			lua_pushvalue(L, dest);
+			lua_call(L, 0, 1);
+			lua_replace(L, dest);
+		}
 		
 		luaL_checktype(L, source, LUA_TTABLE);
 		luaL_checktype(L, dest, LUA_TTABLE);
@@ -130,22 +142,10 @@ ckv_disconnect(lua_State *L)
 
 /* LIBRARY REGISTRATION */
 
-/* opens ckv library */
-int
-open_ckvugen(lua_State *L) {
-	lua_CFunction *fn;
-	
-	/* UGen */
-	lua_createtable(L, 0, 3 /* estimated number of functions */);
-	lua_pushcfunction(L, ckv_ugen_sum_inputs); lua_setfield(L, -2, "sum_inputs");
-	lua_setglobal(L, "UGen");
-	
-	/* connect & disconnect */
-	lua_pushcfunction(L, ckv_connect); lua_setglobal(L, "connect");
-	lua_pushcfunction(L, ckv_connect); lua_setglobal(L, "c");
-	lua_pushcfunction(L, ckv_disconnect); lua_setglobal(L, "disconnect");
-	
-	/* unit generator graph & functions */
+static
+void
+open_ugen_graph(lua_State *L)
+{
 	lua_createtable(L, 0 /* array */, 6 /* non-array */);
 	
 	lua_newtable(L);
@@ -241,6 +241,25 @@ open_ckvugen(lua_State *L) {
 	lua_setfield(L, -2, "tick_all");
 	
 	lua_setfield(L, LUA_REGISTRYINDEX, "ugen_graph");
+}
+
+/* opens ckv library */
+int
+open_ckvugen(lua_State *L)
+{
+	lua_CFunction *fn;
+	
+	/* UGen */
+	lua_createtable(L, 0, 3 /* estimated number of functions */);
+	lua_pushcfunction(L, ckv_ugen_sum_inputs); lua_setfield(L, -2, "sum_inputs");
+	lua_setglobal(L, "UGen");
+	
+	/* connect & disconnect */
+	lua_pushcfunction(L, ckv_connect); lua_setglobal(L, "connect");
+	lua_pushcfunction(L, ckv_connect); lua_setglobal(L, "c");
+	lua_pushcfunction(L, ckv_disconnect); lua_setglobal(L, "disconnect");
+	
+	open_ugen_graph(L);
 	
 	/* ugens */
 	for(fn = ugens; *fn != NULL; fn++) {
@@ -250,31 +269,22 @@ open_ckvugen(lua_State *L) {
 	
 	/* blackhole */
 	lua_getglobal(L, "Gain");
-	lua_getfield(L, -1, "new");
-	lua_pushvalue(L, -2); /* push Gain again (argument to new) */
-	lua_call(L, 1, 1);
+	lua_call(L, 0, 1);
 	lua_setglobal(L, "blackhole");
-	lua_pop(L, 1); /* pop Gain */
 	
 	/* dac */
 	lua_getglobal(L, "Gain");
-	lua_getfield(L, -1, "new");
-	lua_pushvalue(L, -2); /* push Gain again (argument to new) */
-	lua_call(L, 1, 1);
+	lua_call(L, 0, 1);
 	lua_pushvalue(L, -1); /* dup dac */
 	lua_setglobal(L, "dac"); /* pops one */
 	lua_setglobal(L, "speaker"); /* pops other */
-	lua_pop(L, 1); /* pop Gain */
 	
 	/* adc */
 	lua_getglobal(L, "Step");
-	lua_getfield(L, -1, "new");
-	lua_pushvalue(L, -2); /* push Step again (argument to new) */
-	lua_call(L, 1, 1);
+	lua_call(L, 0, 1);
 	lua_pushvalue(L, -1); /* dup adc */
 	lua_setglobal(L, "adc"); /* pops one */
 	lua_setglobal(L, "mic"); /* pops other */
-	lua_pop(L, 1); /* pop Step */
 	
 	return 1; /* return globals */
 }
