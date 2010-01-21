@@ -82,16 +82,14 @@ ckv_delay_new(lua_State *L)
 	Delay *delay;
 	lua_Number delay_amount = 0;
 	
-	luaL_checktype(L, 1, LUA_TTABLE);
-	
 	delay = malloc(sizeof(Delay));
 	if(delay == NULL) {
 		fprintf(stderr, "[ckv] memory error allocating Delay\n");
 		return 0;
 	}
 	
-	if(lua_isnumber(L, 2)) {
-		delay_amount = lua_tonumber(L, 2);
+	if(lua_isnumber(L, 1)) {
+		delay_amount = lua_tonumber(L, 1);
 		if(delay_amount < 0)
 			delay_amount = 0;
 	} else {
