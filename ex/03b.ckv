@@ -1,5 +1,5 @@
 
-s = SinOsc:new();
+s = SinOsc();
 
 while yield(global.fun_time) do
 	connect(s, speaker);

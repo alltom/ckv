@@ -13,7 +13,7 @@ fork(function()
 		count = count + 1
 		print(count, "sines");
 		
-		connect(SinOsc:new(100 + count * 100), speaker);
+		connect(SinOsc(100 + count * 100), speaker);
 		speaker.gain = 1.0 / count;
 	end
 end)

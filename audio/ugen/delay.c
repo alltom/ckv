@@ -82,16 +82,14 @@ ckv_delay_new(lua_State *L)
 	Delay *delay;
 	lua_Number delay_amount = 0;
 	
-	luaL_checktype(L, 1, LUA_TTABLE);
-	
 	delay = malloc(sizeof(Delay));
 	if(delay == NULL) {
 		fprintf(stderr, "[ckv] memory error allocating Delay\n");
 		return 0;
 	}
 	
-	if(lua_isnumber(L, 2)) {
-		delay_amount = lua_tonumber(L, 2);
+	if(lua_isnumber(L, 1)) {
+		delay_amount = lua_tonumber(L, 1);
 		if(delay_amount < 0)
 			delay_amount = 0;
 	} else {
@@ -134,9 +132,8 @@ ckv_delay_new(lua_State *L)
 int
 open_ugen_delay(lua_State *L)
 {
-	lua_createtable(L, 0, 1 /* estimated number of functions */);
-	lua_pushcfunction(L, ckv_delay_new); lua_setfield(L, -2, "new");
-	lua_setglobal(L, "Delay"); /* pops */
+	lua_pushcfunction(L, ckv_delay_new);
+	lua_setglobal(L, "Delay");
 	
 	return 0;
 }
