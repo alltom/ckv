@@ -13,6 +13,7 @@
 typedef struct VM {
 	CKVM ckvm;
 	CKVAudio audio;
+	CKVGL gl;
 	
 	pthread_mutex_t audio_done_mutex;
 	pthread_cond_t audio_done;
@@ -161,11 +162,13 @@ main(int argc, char *argv[])
 			return EXIT_FAILURE;
 		}
 
-		CKVGL gl = ckvgl_open(vm.ckvm, 800, 600);
-		if(gl == NULL) {
+		vm.gl = ckvgl_open(vm.ckvm, 800, 600);
+		if(vm.gl == NULL) {
 			print_error("could not start opengl");
 			return EXIT_FAILURE;
 		}
+		
+		ckvgl_begin(vm.gl);
 		
 		/* wait for audio to finish */
 		pthread_cond_wait(&vm.audio_done, &vm.audio_done_mutex);

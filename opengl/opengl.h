@@ -6,6 +6,7 @@
 
 typedef struct CKVGL *CKVGL;
 CKVGL ckvgl_open(CKVM vm, int width, int height);
+void ckvgl_begin(CKVGL gl);
 int ckvgl_width(CKVGL gl);
 int ckvgl_height(CKVGL gl);
 void ckvgl_draw(CKVGL gl);
