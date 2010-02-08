@@ -73,6 +73,11 @@ open_base_libs(VM *vm, int all_libs)
 	lua_setglobal(L, "rand"); /* alias as rand */
 	lua_pop(L, 1); /* pop math */
 	
+	/* handy function for synching incoming shreds */
+	(void) luaL_dostring(L,
+	"function sync(period) yield(period - (now() % period)) end"
+	);
+	
 	/* handy random functions */
 	(void) luaL_dostring(L,
 	"function maybe() return random() < 0.5 end "
