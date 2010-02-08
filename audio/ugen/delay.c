@@ -1,5 +1,6 @@
 
 #include "ugen.h"
+#include "../../ckvm.h"
 #include <stdlib.h>
 #include <math.h>
 

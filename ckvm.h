@@ -23,4 +23,6 @@ void ckvm_run(CKVM vm); /* runs 'til all threads die or fall asleep */
 int ckvm_running(CKVM vm);
 void ckvm_destroy(CKVM vm);
 
+void pushstdglobal(lua_State *L, const char *name);
+
 #endif
