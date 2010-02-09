@@ -31,6 +31,8 @@ typedef struct Event {
 static Thread *new_thread(VM *vm, lua_State *parentL);
 static void create_standalone_thread_env(Thread *thread);
 static void free_thread(Thread *thread);
+static void yield_time(CKVM vm, Thread *thread);
+static void yield_on_event(CKVM vm, Thread *thread);
 static int open_ckv(lua_State *L);
 
 static
@@ -216,35 +218,9 @@ ckvm_run_one(CKVM vm)
 		if(lua_type(thread->L, 1) == LUA_TNIL) {
 			terror(vm, thread->L, "attempted to yield nil");
 		} else if(lua_type(thread->L, 1) == LUA_TTABLE) {
-			/* sleep on an event */
-			Event *ev;
-			
-			lua_pushstring(thread->L, "obj");
-			lua_rawget(thread->L, 1);
-			ev = lua_touserdata(thread->L, -1);
-			lua_pop(thread->L, 1);
-			
-			if(ev == NULL) {
-				terror(vm, thread->L, "attempted to yield something not an event or duration");
-				break;
-			}
-			
-			queue_insert(ev->waiting, thread->now, thread);
-			vm->num_sleeping_threads++;
-			
-			/* for when they resume */
-			lua_pushvalue(thread->L, 1);
+			yield_on_event(vm, thread);
 		} else {
-			/* yield some samples */
-			
-			lua_Number amount = luaL_checknumber(thread->L, -1);
-			if(amount > 0)
-				thread->now += amount;
-			
-			queue_insert(vm->queue, thread->now, thread);
-			
-			/* for when they resume */
-			lua_pushvalue(thread->L, 1);
+			yield_time(vm, thread);
 		}
 		
 		break;
@@ -360,6 +336,50 @@ free_thread(Thread *thread)
 {
 	free(thread);
 }
+
+static
+void
+yield_time(CKVM vm, Thread *thread)
+{
+	lua_Number amount;
+	
+	/* stack has duration */
+	
+	amount = luaL_checknumber(thread->L, -1);
+	if(amount > 0)
+		thread->now += amount;
+	
+	queue_insert(vm->queue, thread->now, thread);
+	
+	/* for when they resume */
+	lua_pushvalue(thread->L, 1);
+}
+
+static
+void
+yield_on_event(CKVM vm, Thread *thread)
+{
+	Event *ev;
+	
+	/* stack has event object */
+	
+	lua_pushstring(thread->L, "obj");
+	lua_rawget(thread->L, 1);
+	ev = lua_touserdata(thread->L, -1);
+	lua_pop(thread->L, 1);
+	
+	if(ev == NULL) {
+		terror(vm, thread->L, "attempted to yield something not an event or duration");
+		return;
+	}
+	
+	queue_insert(ev->waiting, thread->now, thread);
+	vm->num_sleeping_threads++;
+	
+	/* for when they resume */
+	lua_pushvalue(thread->L, 1);
+}
+
 
 /*
 Lua methods
