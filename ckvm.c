@@ -177,6 +177,19 @@ ckvm_remove_thrad(CKVM_Thread thread)
 	lua_pop(vm->L, 1); /* pop registry.threads */
 }
 
+CKVM_Thread
+ckvm_get_thread(lua_State *L)
+{
+	Thread *thread;
+	
+	lua_pushlightuserdata(L, L);
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	thread = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+	
+	return thread;
+}
+
 double
 ckvm_now(CKVM vm)
 {
@@ -346,19 +359,6 @@ void
 free_thread(Thread *thread)
 {
 	free(thread);
-}
-
-CKVM_Thread
-ckvm_get_thread(lua_State *L)
-{
-	Thread *thread;
-	
-	lua_pushlightuserdata(L, L);
-	lua_gettable(L, LUA_REGISTRYINDEX);
-	thread = lua_touserdata(L, -1);
-	lua_pop(L, 1);
-	
-	return thread;
 }
 
 /*
