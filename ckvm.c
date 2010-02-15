@@ -625,15 +625,22 @@ void
 yield_time(CKVM vm, Thread *thread)
 {
 	lua_Number amount;
+	Scheduler *scheduler;
 	
-	/* stack has duration */
+	/* stack has duration, and possibly a scheduler */
 	
-	amount = luaL_checknumber(thread->L, -1);
+	amount = luaL_checknumber(thread->L, 1);
+	
+	if(lua_type(thread->L, 2) == LUA_TUSERDATA)
+		scheduler = lua_touserdata(thread->L, 2);
+	else
+		scheduler = thread->vm->scheduler;
+	
 	if(amount > 0) {
-		enqueue_thread(vm->scheduler, thread->vm->scheduler->now + amount, thread);
+		enqueue_thread(scheduler, scheduler->now + amount, thread);
 	} else {
 		terror(thread->vm, thread->L, "attempted to yield negative time");
-		enqueue_thread(vm->scheduler, thread->vm->scheduler->now, thread);
+		enqueue_thread(scheduler, scheduler->now, thread);
 	}
 	
 	/* for when they resume */
