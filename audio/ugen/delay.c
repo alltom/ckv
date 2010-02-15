@@ -33,7 +33,7 @@ ckv_delay_tick(lua_State *L)
 		last_value = delay->buffer[delay->ptr - delay->delay_length];
 	
 	/* get the latest input sample */
-	pushstdglobal(L, "UGen");
+	ckvm_pushstdglobal(L, "UGen");
 	lua_getfield(L, -1, "sum_inputs");
 	lua_pushvalue(L, 1);
 	lua_call(L, 1, 1);
@@ -94,7 +94,7 @@ ckv_delay_new(lua_State *L)
 		if(delay_amount < 0)
 			delay_amount = 0;
 	} else {
-		pushstdglobal(L, "sample_rate");
+		ckvm_pushstdglobal(L, "sample_rate");
 		delay_amount = lua_tonumber(L, -1) / 10.0; /* ~100 ms */
 		lua_pop(L, 1);
 	}

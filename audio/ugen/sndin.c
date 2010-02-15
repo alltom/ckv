@@ -1,6 +1,6 @@
 
 #include "ugen.h"
-#include "../../ckv.h"
+#include "../../ckvm.h"
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -250,7 +250,7 @@ ckv_sndin_new(lua_State *L)
 	lua_setfield(L, -2, "filename");
 	
 	/* self.duration = ... */
-	pushstdglobal(L, "sample_rate");
+	ckvm_pushstdglobal(L, "sample_rate");
 	lua_Number sample_rate = lua_tonumber(L, -1);
 	lua_pop(L, 1);
 	lua_pushnumber(L, sndin->pFormatCtx->duration / 1000000.0 * sample_rate);
@@ -274,7 +274,7 @@ ckv_sndin_play(lua_State *L)
 	luaL_checktype(L, 1, LUA_TSTRING);
 	
 	if(lua_gettop(L) == 1)
-		pushstdglobal(L, "speaker");
+		ckvm_pushstdglobal(L, "speaker");
 	
 	/* create SndIn obj */
 	lua_pushcfunction(L, ckv_sndin_new);
@@ -284,7 +284,7 @@ ckv_sndin_play(lua_State *L)
 	if(lua_isnil(L, -1))
 		return 0;
 	
-	pushstdglobal(L, "fork");
+	ckvm_pushstdglobal(L, "fork");
 	(void) luaL_dostring(L,
 	"return function(sndin, dest)"
 	"  connect(sndin, dest);"

@@ -88,6 +88,15 @@ queue_min(PQ q)
 	return NULL;
 }
 
+double
+queue_min_priority(PQ q)
+{
+	if(q->count > 0)
+		return q->items[1].priority;
+	
+	return -1;
+}
+
 void *
 remove_queue_min(PQ q)
 {

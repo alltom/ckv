@@ -10,13 +10,22 @@
 
 typedef struct CKVM_Thread {
 	lua_State *L;
-	double now;
 	CKVM vm;
+	struct Scheduler *scheduler;
 } Thread;
+
+typedef struct Scheduler {
+	PQ queue;
+	double now; /* invariant: every scheduler's now always refers to the same time, with different units */
+	            /* invariant: now is always updated before any thread is resumed */
+	double rate;
+	struct Scheduler *next; /* next in linked list of schedulers */
+} Scheduler;
 
 typedef struct CKVM {
 	int running;
-	PQ queue;
+	double now;
+	Scheduler *scheduler; /* invariant: first scheduler is always real time (audio sample units) */
 	int num_sleeping_threads;
 	lua_State *L;
 	Thread main_thread;
@@ -28,12 +37,28 @@ typedef struct Event {
 	PQ waiting;
 } Event;
 
+static int ckv_now(lua_State *L);
+static int ckv_exit(lua_State *L);
+static int ckv_fork(lua_State *L);
+static int ckv_fork_eval(lua_State *L);
+static int ckv_yield(lua_State *L);
+static int ckv_event_broadcast(lua_State *L);
+static int ckv_event_new(lua_State *L);
+static int open_ckv(lua_State *L);
+
+static Scheduler *new_scheduler(double now, double rate);
+static void free_scheduler(Scheduler *scheduler);
+static int enqueue_thread(Scheduler *scheduler, double now, Thread *thread);
+static Scheduler *scheduler_with_next_thread(VM *vm);
+
 static Thread *new_thread(VM *vm, lua_State *parentL);
 static void create_standalone_thread_env(Thread *thread);
 static void free_thread(Thread *thread);
 static void yield_time(CKVM vm, Thread *thread);
 static void yield_on_event(CKVM vm, Thread *thread);
-static int open_ckv(lua_State *L);
+static void run_thread(VM *vm, Thread *thread);
+static double real_time(VM *vm, Scheduler *scheduler, double t);
+static void fast_forward(VM *vm, double new_now);
 
 static
 void
@@ -74,15 +99,15 @@ ckvm_create(ErrorCallback err_callback)
 		return NULL;
 	}
 	
-	vm->queue = new_queue(1);
-	if(!vm->queue) {
+	vm->scheduler = new_scheduler(0 /* now */, 1 /* rate */);
+	if(vm->scheduler == NULL) {
 		free(vm);
 		return NULL;
 	}
 	
 	vm->L = luaL_newstate();
 	if(vm->L == NULL) {
-		free(vm->queue);
+		free_scheduler(vm->scheduler);
 		free(vm);
 		return NULL;
 	}
@@ -91,7 +116,7 @@ ckvm_create(ErrorCallback err_callback)
 	
 	vm->main_thread.vm = vm;
 	vm->main_thread.L = vm->L;
-	vm->main_thread.now = 0;
+	vm->main_thread.scheduler = vm->scheduler;
 	
 	/* put main thread in thread registry */
 	lua_pushlightuserdata(vm->L, vm->L);
@@ -151,7 +176,7 @@ ckvm_add_thread(CKVM vm, const char *filename)
 		error(vm, "%s: cannot open file\n", filename);
 		break;
 	default:
-		if(!queue_insert(vm->queue, vm->main_thread.now, thread))
+		if(!enqueue_thread(vm->scheduler, vm->scheduler->now, thread))
 			fprintf(stderr, "[ckv] %s: could not add to thread queue\n", filename);
 	}
 	
@@ -159,14 +184,14 @@ ckvm_add_thread(CKVM vm, const char *filename)
 }
 
 void
-ckvm_remove_thrad(CKVM_Thread thread)
+ckvm_remove_thread(CKVM_Thread thread)
 {
 	VM *vm = thread->vm;
 	
 	if(!vm->running)
 		return;
 	
-	remove_queue_items(vm->queue, thread);
+	remove_queue_items(thread->scheduler->queue, thread);
 	
 	lua_pushlightuserdata(vm->L, thread->L);
 	lua_pushnil(vm->L);
@@ -195,61 +220,73 @@ ckvm_get_thread(lua_State *L)
 double
 ckvm_now(CKVM vm)
 {
-	return vm->main_thread.now;
+	return vm->scheduler->now;
 }
 
 void
 ckvm_run_one(CKVM vm)
 {
+	double new_now;
 	Thread *thread;
+	Scheduler *scheduler;
 	
 	if(!vm->running)
 		return;
 	
-	thread = remove_queue_min(vm->queue);
+	scheduler = scheduler_with_next_thread(vm);
+	if(scheduler == NULL)
+		return;
 	
-	vm->main_thread.now = thread->now;
-	
-	switch(lua_resume(thread->L, lua_gettop(thread->L) - 1)) {
-	case 0:
-		ckvm_remove_thrad(thread);
-		break;
-	case LUA_YIELD: {
-		if(lua_type(thread->L, 1) == LUA_TNIL) {
-			terror(vm, thread->L, "attempted to yield nil");
-		} else if(lua_type(thread->L, 1) == LUA_TTABLE) {
-			yield_on_event(vm, thread);
-		} else {
-			yield_time(vm, thread);
-		}
-		
-		break;
-	}
-	case LUA_ERRRUN:
-		terror(vm, thread->L, "runtime error: %s", lua_tostring(thread->L, -1));
-		ckvm_remove_thrad(thread);
-		break;
-	case LUA_ERRMEM:
-		terror(vm, thread->L, "memory allocation error");
-		ckvm_remove_thrad(thread);
-		break;
-	}
+	new_now = real_time(vm, scheduler, queue_min_priority(scheduler->queue));
+	thread = remove_queue_min(scheduler->queue);
+	fast_forward(vm, new_now);
+	run_thread(vm, thread);
 }
 
 void
 ckvm_run_until(CKVM vm, double new_now)
 {
-	while(vm->running && !queue_empty(vm->queue) && ((Thread *)queue_min(vm->queue))->now < new_now)
-		ckvm_run_one(vm);
+	double now;
+	Thread *thread;
+	Scheduler *scheduler;
 	
-	vm->main_thread.now = new_now;
+	while(vm->running) {
+		scheduler = scheduler_with_next_thread(vm);
+		if(scheduler == NULL)
+			break;
+
+		now = real_time(vm, scheduler, queue_min_priority(scheduler->queue));
+		thread = queue_min(scheduler->queue);
+		
+		if(now > new_now)
+			break;
+		
+		remove_queue_min(scheduler->queue);
+		fast_forward(vm, now);
+		run_thread(vm, thread);
+	}
+	
+	fast_forward(vm, new_now);
 }
 
 void
 ckvm_run(CKVM vm)
 {
-	while(vm->running && !queue_empty(vm->queue))
-		ckvm_run_one(vm);
+	double new_now;
+	Thread *thread;
+	Scheduler *scheduler;
+	
+	while(vm->running) {
+		scheduler = scheduler_with_next_thread(vm);
+		if(scheduler == NULL)
+			return;
+
+		new_now = real_time(vm, scheduler, queue_min_priority(scheduler->queue));
+		thread = remove_queue_min(scheduler->queue);
+		
+		fast_forward(vm, new_now);
+		run_thread(vm, thread);
+	}
 }
 
 int
@@ -261,123 +298,26 @@ ckvm_running(CKVM vm)
 void
 ckvm_destroy(CKVM vm)
 {
+	Scheduler *scheduler;
+	
 	lua_close(vm->L);
-	free(vm->queue);
+	
+	scheduler = vm->scheduler;
+	while(scheduler != NULL) {
+		Scheduler *next = scheduler->next;
+		free_scheduler(scheduler);
+		scheduler = next;
+	}
+	
 	free(vm);
 }
 
-
-/*
-private methods
-*/
-
-
-static
-Thread *
-new_thread(VM *vm, lua_State *parentL)
-{
-	lua_State *L; /* new thread state */
-	Thread *thread;
-	
-	thread = malloc(sizeof(Thread));
-	if(!thread)
-		return NULL;
-	
-	/* create the thread and save a reference in THREADS_TABLE */
-	/* threads are garbage collected, so reference is saved until unregister_thread */
-	lua_getfield(parentL, LUA_REGISTRYINDEX, THREADS_TABLE);
-	L = lua_newthread(parentL); /* pushes thread reference */
-	lua_pushlightuserdata(parentL, L);
-	lua_pushvalue(parentL, -2); /* push thread ref again so it's on top */
-	lua_rawset(parentL, -4); /* registry.threads[thread] = lua thread ref */
-	lua_pop(parentL, 2); /* pop original lua thread ref and registry.threads */
-	
-	lua_pushlightuserdata(L, L);
-	lua_pushlightuserdata(L, thread);
-	lua_settable(L, LUA_REGISTRYINDEX); /* registry[state] = thread */
-	
-	thread->L = L;
-	thread->now = vm->main_thread.now;
-	thread->vm = vm;
-	
-	return thread;
-}
-
-static
 void
-create_standalone_thread_env(Thread *thread)
-{	
-	/* get "global", give thread a blank env, then copy "global" to it */
-	lua_pushthread(thread->L);
-	lua_getfield(thread->L, LUA_REGISTRYINDEX, GLOBAL_NAMESPACE);
-	lua_newtable(thread->L);
-	lua_setfenv(thread->L, -3); /* makes the newtable the env for the thread we pushed above */
-	lua_setglobal(thread->L, GLOBAL_NAMESPACE); /* set "global" in new namespace */
-	
-	lua_pop(thread->L, 1); /* pop lua thread ref; stack empty */
-	
-	/* copy everything in prototype global env to this env */
-	lua_pushnil(thread->vm->L);  /* first key */
-	while(lua_next(thread->vm->L, LUA_GLOBALSINDEX) != 0) {
-		/* copy to new env */
-		lua_pushvalue(thread->vm->L, -2); /* push key */
-		lua_pushvalue(thread->vm->L, -2); /* push value */
-		lua_xmove(thread->vm->L, thread->L, 2);
-		lua_rawset(thread->L, LUA_GLOBALSINDEX);
-		
-		/* removes 'value'; keeps 'key' for next iteration */
-		lua_pop(thread->vm->L, 1);
-	}
-}
-
-static
-void
-free_thread(Thread *thread)
+ckvm_pushstdglobal(lua_State *L, const char *name)
 {
-	free(thread);
-}
-
-static
-void
-yield_time(CKVM vm, Thread *thread)
-{
-	lua_Number amount;
-	
-	/* stack has duration */
-	
-	amount = luaL_checknumber(thread->L, -1);
-	if(amount > 0)
-		thread->now += amount;
-	
-	queue_insert(vm->queue, thread->now, thread);
-	
-	/* for when they resume */
-	lua_pushvalue(thread->L, 1);
-}
-
-static
-void
-yield_on_event(CKVM vm, Thread *thread)
-{
-	Event *ev;
-	
-	/* stack has event object */
-	
-	lua_pushstring(thread->L, "obj");
-	lua_rawget(thread->L, 1);
-	ev = lua_touserdata(thread->L, -1);
-	lua_pop(thread->L, 1);
-	
-	if(ev == NULL) {
-		terror(vm, thread->L, "attempted to yield something not an event or duration");
-		return;
-	}
-	
-	queue_insert(ev->waiting, thread->now, thread);
-	vm->num_sleeping_threads++;
-	
-	/* for when they resume */
-	lua_pushvalue(thread->L, 1);
+	Thread *thread = ckvm_get_thread(L);
+	lua_getglobal(thread->vm->L, name);
+	lua_xmove(thread->vm->L, L, 1);
 }
 
 
@@ -389,7 +329,8 @@ static
 int
 ckv_now(lua_State *L)
 {
-	lua_pushnumber(L, ckvm_get_thread(L)->now);
+	Thread *thread = ckvm_get_thread(L);
+	lua_pushnumber(L, thread->scheduler->now);
 	return 1;
 }
 
@@ -421,7 +362,7 @@ ckv_fork(lua_State *L)
 	
 	lua_xmove(parent->L, thread->L, lua_gettop(parent->L)); /* move function and args over */
 	
-	if(!queue_insert(parent->vm->queue, thread->now, thread)) {
+	if(!enqueue_thread(parent->vm->scheduler, parent->vm->scheduler->now, thread)) {
 		terror(parent->vm, parent->L, "could not enqueue child thread");
 		free_thread(thread);
 	}
@@ -453,7 +394,7 @@ ckv_fork_eval(lua_State *L)
 		free(thread);
 		break;
 	default:
-		if(!queue_insert(parent->vm->queue, thread->now, thread))
+		if(!enqueue_thread(parent->vm->scheduler, parent->vm->scheduler->now, thread))
 			terror(parent->vm, parent->L, "could not enqueue child thread");
 	}
 	
@@ -475,7 +416,7 @@ ckv_event_broadcast(lua_State *L)
 	Event *ev;
 	
 	luaL_checktype(L, 1, LUA_TTABLE); /* event */
-	now = ckvm_get_thread(L)->now;
+	now = ckvm_get_thread(L)->vm->scheduler->now;
 	
 	lua_getfield(L, 1, "obj");
 	ev = lua_touserdata(L, -1);
@@ -483,8 +424,8 @@ ckv_event_broadcast(lua_State *L)
 	
 	while(!queue_empty(ev->waiting)) {
 		Thread *thread = remove_queue_min(ev->waiting);
-		thread->now = now;
-		queue_insert(thread->vm->queue, thread->now, thread);
+		if(!enqueue_thread(thread->vm->scheduler, thread->vm->scheduler->now, thread))
+			terror(thread->vm, thread->L, "could not insert woken thread into scheduler");
 		thread->vm->num_sleeping_threads--;
 	}
 	
@@ -548,10 +489,230 @@ open_ckv(lua_State *L) {
 	return 1;
 }
 
-void
-pushstdglobal(lua_State *L, const char *name)
+
+/*
+private methods
+*/
+
+static
+Scheduler *
+new_scheduler(double now, double rate)
 {
-	Thread *thread = ckvm_get_thread(L);
-	lua_getglobal(thread->vm->L, name);
-	lua_xmove(thread->vm->L, L, 1);
+	Scheduler *scheduler = malloc(sizeof(Scheduler));
+	if(!scheduler)
+		return NULL;
+	
+	scheduler->queue = new_queue(1);
+	if(!scheduler->queue) {
+		free(scheduler);
+		return NULL;
+	}
+	
+	scheduler->now = now;
+	scheduler->rate = rate;
+	scheduler->next = NULL;
+	
+	return scheduler;
+}
+
+static
+void
+free_scheduler(Scheduler *scheduler)
+{
+	free(scheduler->queue);
+	free(scheduler);
+}
+
+static
+int
+enqueue_thread(Scheduler *scheduler, double now, Thread *thread)
+{
+	return queue_insert(scheduler->queue, now, thread);
+}
+
+static
+Scheduler *
+scheduler_with_next_thread(VM *vm)
+{
+	int found = 0;
+	double earliest_now = 0;
+	Scheduler *earliest_scheduler = NULL;
+	
+	Scheduler *scheduler = vm->scheduler;
+	while(scheduler != NULL) {
+		double now = queue_min_priority(scheduler->queue);
+		double real_now = real_time(vm, scheduler, now);
+		
+		if(!queue_empty(scheduler->queue) && (!found || real_now < earliest_now)) {
+			earliest_now = real_now;
+			earliest_scheduler = scheduler;
+			found = 1;
+		}
+		
+		scheduler = scheduler->next;
+	}
+	
+	return earliest_scheduler;
+}
+
+static
+Thread *
+new_thread(VM *vm, lua_State *parentL)
+{
+	lua_State *L; /* new thread state */
+	Thread *thread;
+	
+	thread = malloc(sizeof(Thread));
+	if(!thread)
+		return NULL;
+	
+	/* create the thread and save a reference in THREADS_TABLE */
+	/* threads are garbage collected, so reference is saved until unregister_thread */
+	lua_getfield(parentL, LUA_REGISTRYINDEX, THREADS_TABLE);
+	L = lua_newthread(parentL); /* pushes thread reference */
+	lua_pushlightuserdata(parentL, L);
+	lua_pushvalue(parentL, -2); /* push thread ref again so it's on top */
+	lua_rawset(parentL, -4); /* registry.threads[thread] = lua thread ref */
+	lua_pop(parentL, 2); /* pop original lua thread ref and registry.threads */
+	
+	lua_pushlightuserdata(L, L);
+	lua_pushlightuserdata(L, thread);
+	lua_settable(L, LUA_REGISTRYINDEX); /* registry[state] = thread */
+	
+	thread->L = L;
+	thread->vm = vm;
+	thread->scheduler = vm->scheduler;
+	
+	return thread;
+}
+
+static
+void
+create_standalone_thread_env(Thread *thread)
+{	
+	/* get "global", give thread a blank env, then copy "global" to it */
+	lua_pushthread(thread->L);
+	lua_getfield(thread->L, LUA_REGISTRYINDEX, GLOBAL_NAMESPACE);
+	lua_newtable(thread->L);
+	lua_setfenv(thread->L, -3); /* makes the newtable the env for the thread we pushed above */
+	lua_setglobal(thread->L, GLOBAL_NAMESPACE); /* set "global" in new namespace */
+	
+	lua_pop(thread->L, 1); /* pop lua thread ref; stack empty */
+	
+	/* copy everything in prototype global env to this env */
+	lua_pushnil(thread->vm->L);  /* first key */
+	while(lua_next(thread->vm->L, LUA_GLOBALSINDEX) != 0) {
+		/* copy to new env */
+		lua_pushvalue(thread->vm->L, -2); /* push key */
+		lua_pushvalue(thread->vm->L, -2); /* push value */
+		lua_xmove(thread->vm->L, thread->L, 2);
+		lua_rawset(thread->L, LUA_GLOBALSINDEX);
+		
+		/* removes 'value'; keeps 'key' for next iteration */
+		lua_pop(thread->vm->L, 1);
+	}
+}
+
+static
+void
+free_thread(Thread *thread)
+{
+	free(thread);
+}
+
+static
+void
+yield_time(CKVM vm, Thread *thread)
+{
+	lua_Number amount;
+	
+	/* stack has duration */
+	
+	amount = luaL_checknumber(thread->L, -1);
+	if(amount > 0) {
+		enqueue_thread(vm->scheduler, thread->vm->scheduler->now + amount, thread);
+	} else {
+		terror(thread->vm, thread->L, "attempted to yield negative time");
+		enqueue_thread(vm->scheduler, thread->vm->scheduler->now, thread);
+	}
+	
+	/* for when they resume */
+	lua_pushvalue(thread->L, 1);
+}
+
+static
+void
+yield_on_event(CKVM vm, Thread *thread)
+{
+	Event *ev;
+	
+	/* stack has event object */
+	
+	lua_pushstring(thread->L, "obj");
+	lua_rawget(thread->L, 1);
+	ev = lua_touserdata(thread->L, -1);
+	lua_pop(thread->L, 1);
+	
+	if(ev == NULL) {
+		terror(vm, thread->L, "attempted to yield something not an event or duration");
+		return;
+	}
+	
+	queue_insert(ev->waiting, thread->vm->scheduler->now, thread);
+	vm->num_sleeping_threads++;
+	
+	/* for when they resume */
+	lua_pushvalue(thread->L, 1);
+}
+
+static
+void
+run_thread(VM *vm, Thread *thread)
+{
+	switch(lua_resume(thread->L, lua_gettop(thread->L) - 1)) {
+	case 0:
+		ckvm_remove_thread(thread);
+		break;
+	case LUA_YIELD: {
+		if(lua_type(thread->L, 1) == LUA_TNIL) {
+			terror(vm, thread->L, "attempted to yield nil");
+		} else if(lua_type(thread->L, 1) == LUA_TTABLE) {
+			yield_on_event(vm, thread);
+		} else {
+			yield_time(vm, thread);
+		}
+		
+		break;
+	}
+	case LUA_ERRRUN:
+		terror(vm, thread->L, "runtime error: %s", lua_tostring(thread->L, -1));
+		ckvm_remove_thread(thread);
+		break;
+	case LUA_ERRMEM:
+		terror(vm, thread->L, "memory allocation error");
+		ckvm_remove_thread(thread);
+		break;
+	}
+}
+
+static
+double
+real_time(VM *vm, Scheduler *scheduler, double t)
+{
+	if(scheduler == vm->scheduler)
+		return t; /* avoid rounding errors by not using below expression below (identity) */
+	
+	return vm->scheduler->now + (t - scheduler->now) / scheduler->rate;
+}
+
+static
+void
+fast_forward(VM *vm, double new_now)
+{
+	double dt = new_now - vm->scheduler->now;
+	Scheduler *scheduler = vm->scheduler->next;
+	
+	vm->scheduler->now = new_now;
+	while(scheduler != NULL)
+		scheduler->now += dt * scheduler->rate;
 }
