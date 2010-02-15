@@ -9,6 +9,7 @@ open_ugen_sinosc(lua_State *L)
 	(void) luaL_dostring(L,
 	"function SinOsc(freq)"
 	"  return {"
+	"    last = 0.0,"
 	"    phase = 0.0,"
 	"    freq = freq or 440.0,"
 	"    tick = function(self)"
@@ -28,6 +29,7 @@ open_ugen_sqrosc(lua_State *L)
 	(void) luaL_dostring(L,
 	"function SqrOsc(freq)"
 	"  return {"
+	"    last = 0.0,"
 	"    phase = 0.0,"
 	"    freq = freq or 440.0,"
 	"    tick = function(self)"
@@ -51,6 +53,7 @@ open_ugen_sawosc(lua_State *L)
 	(void) luaL_dostring(L,
 	"function SawOsc(freq)"
 	"  return {"
+	"    last = 0.0,"
 	"    phase = 0.0,"
 	"    freq = freq or 440.0,"
 	"    tick = function(self)"

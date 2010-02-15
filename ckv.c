@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <pthread.h>
+#include <string.h>
 
 typedef struct VM {
 	CKVM ckvm;
@@ -46,6 +47,47 @@ error_callback(CKVM vm, const char *message)
 
 static
 int
+clock_set(lua_State *L)
+{
+	const char *attr = lua_tostring(L, 2);
+	
+	if(strcmp(attr, "bpm") == 0) {
+		lua_Number sample_rate;
+		double bpm = lua_tonumber(L, 3);
+		
+		ckvm_pushstdglobal(L, "sample_rate");
+		sample_rate = lua_tonumber(L, -1);
+
+		if(!ckvm_set_scheduler_rate(L, 1, bpm / (60.0 * sample_rate)))
+			print_error("attempt to set invalid (negative or 0) bpm");
+		
+		return 0;
+	}
+	
+	return 0;
+}
+
+static
+int
+clock_get(lua_State *L)
+{
+	const char *attr = lua_tostring(L, 2);
+	
+	if(strcmp(attr, "bpm") == 0) {
+		lua_Number sample_rate;
+		
+		ckvm_pushstdglobal(L, "sample_rate");
+		sample_rate = lua_tonumber(L, -1);
+		
+		lua_pushnumber(L, ckvm_get_scheduler_rate(L, 1) * 60.0 * sample_rate);
+		return 1;
+	}
+	
+	return 0;
+}
+
+static
+int
 clock_new(lua_State *L)
 {
 	lua_Number bpm, sample_rate, rate;
@@ -60,7 +102,14 @@ clock_new(lua_State *L)
 	
 	rate = 1.0 / (60.0 / bpm * sample_rate);
 	
+	/* the new Clock */
 	ckvm_push_new_scheduler(L, rate);
+	
+	/* the metatable for the Clock */
+	lua_createtable(L, 0 /* array */, 2 /* non-array */);
+	lua_pushcfunction(L, clock_get); lua_setfield(L, -2, "__index");
+	lua_pushcfunction(L, clock_set); lua_setfield(L, -2, "__newindex");
+	lua_setmetatable(L, -2);
 	
 	return 1;
 }
