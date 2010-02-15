@@ -1,0 +1,43 @@
+clock = Clock()
+
+clock_mod = SinOsc(0.1)
+c(clock_mod, blackhole)
+
+fork(function()
+  while yield(1, clock) do
+    fork(function()
+      local n = SinOsc(400)
+      c(n, speaker)
+      yield(100 * ms)
+      disconnect(n, speaker)
+    end)
+  end
+end)
+
+fork(function()
+  while yield(0.5, clock) do
+    fork(function()
+      local n = SinOsc(800)
+      c(n, speaker)
+      yield(100 * ms)
+      disconnect(n, speaker)
+    end)
+  end
+end)
+
+fork(function()
+  while yield(0.5 * second) do
+    fork(function()
+      local n = SawOsc()
+      c(n, speaker)
+      yield(second / 100)
+      disconnect(n, speaker)
+    end)
+  end
+end)
+
+while true do
+  clock.bpm = clock_mod.last * 30 + 60
+  print("bpm:", clock.bpm)
+  yield(100 * ms)
+end
