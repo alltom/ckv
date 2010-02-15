@@ -363,7 +363,14 @@ int
 ckv_now(lua_State *L)
 {
 	Thread *thread = ckvm_get_thread(L);
-	lua_pushnumber(L, thread->scheduler->now);
+	Scheduler *scheduler;
+	
+	scheduler = lua_touserdata(L, 1);
+	if(scheduler == NULL)
+		scheduler = thread->vm->scheduler;
+	
+	lua_pushnumber(L, scheduler->now);
+	
 	return 1;
 }
 
