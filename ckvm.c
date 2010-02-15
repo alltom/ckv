@@ -320,6 +320,39 @@ ckvm_pushstdglobal(lua_State *L, const char *name)
 	lua_xmove(thread->vm->L, L, 1);
 }
 
+void
+ckvm_push_new_scheduler(lua_State *L, double rate)
+{
+	Thread *thread = ckvm_get_thread(L);
+	Scheduler *main_scheduler = thread->vm->scheduler;
+	Scheduler *scheduler = new_scheduler(0, rate);
+	
+	/* insert after main scheduler */
+	scheduler->next = main_scheduler->next;
+	main_scheduler->next = scheduler;
+	
+	lua_pushlightuserdata(L, scheduler);
+}
+
+int
+ckvm_set_scheduler_rate(lua_State *L, int stack_index, double rate)
+{
+	Scheduler *scheduler = lua_touserdata(L, stack_index);
+	
+	if(rate <= 0)
+		return -1;
+	
+	scheduler->rate = rate;
+	return 1;
+}
+
+double
+ckvm_get_scheduler_rate(lua_State *L, int stack_index)
+{
+	Scheduler *scheduler = lua_touserdata(L, stack_index);
+	return scheduler->rate;
+}
+
 
 /*
 Lua methods
@@ -537,8 +570,8 @@ scheduler_with_next_thread(VM *vm)
 	int found = 0;
 	double earliest_now = 0;
 	Scheduler *earliest_scheduler = NULL;
-	
 	Scheduler *scheduler = vm->scheduler;
+	
 	while(scheduler != NULL) {
 		double now = queue_min_priority(scheduler->queue);
 		double real_now = real_time(vm, scheduler, now);
@@ -631,7 +664,7 @@ yield_time(CKVM vm, Thread *thread)
 	
 	amount = luaL_checknumber(thread->L, 1);
 	
-	if(lua_type(thread->L, 2) == LUA_TUSERDATA)
+	if(lua_type(thread->L, 2) == LUA_TLIGHTUSERDATA)
 		scheduler = lua_touserdata(thread->L, 2);
 	else
 		scheduler = thread->vm->scheduler;
@@ -720,6 +753,8 @@ fast_forward(VM *vm, double new_now)
 	Scheduler *scheduler = vm->scheduler->next;
 	
 	vm->scheduler->now = new_now;
-	while(scheduler != NULL)
+	while(scheduler != NULL) {
 		scheduler->now += dt * scheduler->rate;
+		scheduler = scheduler->next;
+	}
 }

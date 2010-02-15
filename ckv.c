@@ -45,6 +45,27 @@ error_callback(CKVM vm, const char *message)
 }
 
 static
+int
+clock_new(lua_State *L)
+{
+	lua_Number bpm, sample_rate, rate;
+	
+	if(lua_gettop(L) > 0)
+		bpm = lua_tonumber(L, 1);
+	else
+		bpm = 120;
+	
+	ckvm_pushstdglobal(L, "sample_rate");
+	sample_rate = lua_tonumber(L, -1);
+	
+	rate = 1.0 / (60.0 / bpm * sample_rate);
+	
+	ckvm_push_new_scheduler(L, rate);
+	
+	return 1;
+}
+
+static
 void
 open_base_libs(VM *vm, int all_libs)
 {
@@ -77,6 +98,10 @@ open_base_libs(VM *vm, int all_libs)
 	(void) luaL_dostring(L,
 	"function sync(period) yield(period - (now() % period)) end"
 	);
+	
+	/* beat clocks */
+	lua_pushcfunction(L, clock_new);
+	lua_setglobal(L, "Clock");
 	
 	/* handy random functions */
 	(void) luaL_dostring(L,
@@ -183,16 +208,7 @@ void
 render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
              double streamTime, void *userData)
 {
-	int i, c;
 	VM *vm = (VM *)userData;
-	
-	if(!ckvm_running(vm->ckvm)) {
-		int channels = ckva_channels(vm->audio);
-		for(i = 0; i < nFrames; i++)
-			for(c = 0; c < channels; c++)
-				outputBuffer[i * channels + c] = 0;
-		return;
-	}
 	
 	ckva_fill_buffer(vm->audio, outputBuffer, inputBuffer, nFrames);
 	

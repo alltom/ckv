@@ -22,6 +22,10 @@ void ckvm_run_until(CKVM vm, double new_now);
 void ckvm_run(CKVM vm); /* runs 'til all threads die or fall asleep */
 int ckvm_running(CKVM vm);
 void ckvm_destroy(CKVM vm);
+
 void ckvm_pushstdglobal(lua_State *L, const char *name);
+void ckvm_push_new_scheduler(lua_State *L, double rate);
+int ckvm_set_scheduler_rate(lua_State *L, int stack_index, double rate); /* positive if successful */
+double ckvm_get_scheduler_rate(lua_State *L, int stack_index);
 
 #endif
