@@ -4,6 +4,31 @@
 /* LIBRARY REGISTRATION */
 
 int
+open_ugen_pulseosc(lua_State *L)
+{
+	(void) luaL_dostring(L,
+	"function PulseOsc(freq)"
+	"  return {"
+	"    last = 0.0,"
+	"    phase = 0.0,"
+	"    freq = freq or 440.0,"
+	"    width = 0.5,"
+	"    tick = function(self)"
+	"      if self.phase < self.width then"
+	"        self.last = 1"
+	"      else"
+	"        self.last = -1"
+	"      end"
+	"      self.phase = (self.phase + self.freq / sample_rate) % 1.0;"
+	"    end,"
+	"  }"
+	"end"
+	);
+	
+	return 0;
+}
+
+int
 open_ugen_sinosc(lua_State *L)
 {
 	(void) luaL_dostring(L,
@@ -58,6 +83,30 @@ open_ugen_sawosc(lua_State *L)
 	"    freq = freq or 440.0,"
 	"    tick = function(self)"
 	"      self.last = self.phase;"
+	"      self.phase = (self.phase + self.freq / sample_rate) % 1.0;"
+	"    end,"
+	"  }"
+	"end"
+	);
+	
+	return 0;
+}
+
+int
+open_ugen_triosc(lua_State *L)
+{
+	(void) luaL_dostring(L,
+	"function TriOsc(freq)"
+	"  return {"
+	"    last = 0.0,"
+	"    phase = 0.0,"
+	"    freq = freq or 440.0,"
+	"    tick = function(self)"
+	"      if self.phase < 0.5 then"
+	"        self.last = self.phase * 4 - 1"
+	"      else"
+	"        self.last = self.phase * (-4) + 3"
+	"      end"
 	"      self.phase = (self.phase + self.freq / sample_rate) % 1.0;"
 	"    end,"
 	"  }"

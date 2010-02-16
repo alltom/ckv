@@ -8,11 +8,13 @@ lua_CFunction ugens[] = {
 	open_ugen_gain,
 	open_ugen_impulse,
 	open_ugen_noise,
+	open_ugen_pulseosc,
 	open_ugen_sawosc,
 	open_ugen_sinosc,
 	open_ugen_sndin,
 	open_ugen_sqrosc,
 	open_ugen_step,
+	open_ugen_triosc,
 	NULL
 };
 
