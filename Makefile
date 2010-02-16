@@ -27,7 +27,7 @@ OBJECTS = ckv.o ckvm.o luabaselite.o $(AUDIO_OBJECTS) rtaudio_wrapper.o pq.o
 EXECUTABLE=ckv
 
 $(EXECUTABLE): $(OBJECTS)
-	g++ $(LDFLAGS) $(OBJECTS) -o $@
+	g++ -o $@ $(OBJECTS) $(LDFLAGS)
 
 rtaudio_wrapper.o: rtaudio_wrapper.cpp
 	g++ $(CFLAGS) -c -o rtaudio_wrapper.o rtaudio_wrapper.cpp $(AUDIO_DEFINE)
