@@ -145,7 +145,7 @@ open_base_libs(VM *vm, int all_libs)
 	
 	/* handy function for synching incoming shreds */
 	(void) luaL_dostring(L,
-	"function sync(period, clock) yield(period - (now(clock) % period), clock) end"
+	"function sync(period, clock) yield(period - (now(clock) % period), clock); return period end"
 	);
 	
 	/* beat clocks */
