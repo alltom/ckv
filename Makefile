@@ -1,8 +1,22 @@
+
+# OSX, LINUX
+PLATFORM=OSX
+
+ifeq ($(PLATFORM),OSX)
+	EXTRA_CFLAGS = -ansi
+	AUDIO_LDFLAGS = -framework CoreAudio
+	FFMPEG_LDFLAGS = -lbz2 -lx264
+endif
+
+ifeq ($(PLATFORM),LINUX)
+	AUDIO_LDFLAGS = -lasound
+endif
+
 CC = gcc
-CFLAGS = -g -ansi -pedantic -Wall -O3
+CFLAGS = -g -pedantic -Wall -O3 $(EXTRA_CFLAGS)
 LDFLAGS = -llua
-LDFLAGS += -lrtaudio -framework CoreAudio -lpthread # audio
-LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz -lbz2 -lx264 # sndin
+LDFLAGS += -lrtaudio -lpthread $(AUDIO_LDFLAGS) # audio
+LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz $(FFMPEG_LDFLAGS) # sndin
 UGEN_OBJECTS=audio/ugen/delay.o audio/ugen/follower.o audio/ugen/gain.o \
              audio/ugen/impulse.o audio/ugen/noise.o audio/ugen/osc.o \
              audio/ugen/sndin.o audio/ugen/step.o audio/ugen/ugen.o
