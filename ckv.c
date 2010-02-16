@@ -135,14 +135,6 @@ open_base_libs(VM *vm, int all_libs)
 	lua_pushcfunction(L, luaopen_math); lua_call(L, 0, 0);
 	lua_gc(L, LUA_GCRESTART, 0);
 	
-	/* import math.random */
-	lua_getglobal(L, "math");
-	lua_getfield(L, -1, "random");
-	lua_setglobal(L, "random"); /* alias as random */
-	lua_getfield(L, -1, "random");
-	lua_setglobal(L, "rand"); /* alias as rand */
-	lua_pop(L, 1); /* pop math */
-	
 	/* handy function for synching incoming shreds */
 	(void) luaL_dostring(L,
 	"function sync(period, clock) yield(period - (now(clock) % period), clock); return period end"
@@ -151,6 +143,19 @@ open_base_libs(VM *vm, int all_libs)
 	/* beat clocks */
 	lua_pushcfunction(L, clock_new);
 	lua_setglobal(L, "Clock");
+	
+	/* midi helpers */
+	(void) luaL_dostring(L,
+	"function mtof(m) return math.pow(2, (m-69)/12) * 440; end"
+	);
+	
+	/* import math.random */
+	lua_getglobal(L, "math");
+	lua_getfield(L, -1, "random");
+	lua_setglobal(L, "random"); /* alias as random */
+	lua_getfield(L, -1, "random");
+	lua_setglobal(L, "rand"); /* alias as rand */
+	lua_pop(L, 1); /* pop math */
 	
 	/* handy random functions */
 	(void) luaL_dostring(L,
