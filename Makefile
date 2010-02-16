@@ -5,11 +5,13 @@ PLATFORM=OSX
 ifeq ($(PLATFORM),OSX)
 	EXTRA_CFLAGS = -ansi
 	AUDIO_LDFLAGS = -framework CoreAudio
+	AUDIO_DEFINE = -D__MACOSX_CORE__
 	FFMPEG_LDFLAGS = -lbz2 -lx264
 endif
 
 ifeq ($(PLATFORM),LINUX)
 	AUDIO_LDFLAGS = -lasound
+	AUDIO_DEFINE = -D__LINUX_ALSA__
 endif
 
 CC = gcc
@@ -28,7 +30,7 @@ $(EXECUTABLE): $(OBJECTS)
 	g++ $(LDFLAGS) $(OBJECTS) -o $@
 
 rtaudio_wrapper.o: rtaudio_wrapper.cpp
-	g++ $(CFLAGS) -c -o rtaudio_wrapper.o rtaudio_wrapper.cpp -D__MACOSX_CORE__
+	g++ $(CFLAGS) -c -o rtaudio_wrapper.o rtaudio_wrapper.cpp $(AUDIO_DEFINE)
 
 audio/ugen/sndin.o: audio/ugen/sndin.c
 	$(CC) -g -Wall -O3 -c -o audio/ugen/sndin.o audio/ugen/sndin.c
