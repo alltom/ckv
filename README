@@ -37,6 +37,7 @@
 --     $ ./ckv ex/01.ckv
 --     $ ./ckv ex/02.ckv
 --     $ ./ckv ex/03.ckv ex/03a.ckv ex/03b.ckv
+--     $ ./ckv ex/04.ckv
 
 -- EXECUTABLE SUMMARY (run this file)
 
