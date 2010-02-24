@@ -21,7 +21,7 @@ void stop_audio(void);
 typedef struct {
 	int channel;
 	int note;
-	float vel;
+	float velocity;
 } MidiMsg;
 
 int start_midi();

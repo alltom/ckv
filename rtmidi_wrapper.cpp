@@ -42,9 +42,9 @@ get_midi_message(MidiMsg *message)
 		int type = (rtmsg[0] & 0xf0) >> 4;
 	
 		if(type == MIDI_NOTE_OFF || (type == MIDI_NOTE_ON && rtmsg[2] == 0)) {
-			message->vel = 0;
+			message->velocity = 0;
 		} else if(type == MIDI_NOTE_ON) {
-			message->vel = rtmsg[2] / 127.0;
+			message->velocity = rtmsg[2] / 127.0;
 		} else {
 			continue; // unrecognized
 		}

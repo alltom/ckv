@@ -235,6 +235,9 @@ main(int argc, char *argv[])
 		
 	} else {
 		
+		if(!start_midi())
+			print_error("could not start MIDI"); /* not fatal */
+		
 		pthread_mutex_init(&vm.audio_done_mutex, NULL /* attr */);
 		pthread_cond_init(&vm.audio_done, NULL /* attr */);
 		
@@ -263,6 +266,11 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
              double streamTime, void *userData)
 {
 	VM *vm = (VM *)userData;
+	MidiMsg midiMsg;
+	
+	while(get_midi_message(&midiMsg)) {
+		printf("[ckv] got MIDI chan: %d note: %d vel: %f\n", midiMsg.channel, midiMsg.note, midiMsg.velocity);
+	}
 	
 	ckva_fill_buffer(vm->audio, outputBuffer, inputBuffer, nFrames);
 	
