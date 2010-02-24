@@ -3,7 +3,6 @@ extern "C" {
 }
 
 #include <RtAudio.h>
-#include <iostream>
 
 static RtAudio audio;
 static AudioCallback callback;
