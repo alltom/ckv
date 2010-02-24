@@ -19,8 +19,9 @@ void stop_audio(void);
 
 /* midi */
 typedef struct {
-	float vel;
+	int channel;
 	int note;
+	float vel;
 } MidiMsg;
 
 int start_midi();

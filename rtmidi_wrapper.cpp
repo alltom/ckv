@@ -6,6 +6,9 @@ extern "C" {
 
 static RtMidiIn midi;
 
+#define MIDI_NOTE_ON (9)
+#define MIDI_NOTE_OFF (8)
+
 extern "C" {
 
 /* returns 0 on failure */
@@ -30,14 +33,27 @@ int
 get_midi_message(MidiMsg *message)
 {
 	std::vector<unsigned char> rtmsg;
-	midi.getMessage(&rtmsg);
-	if(rtmsg.size() == 0)
-		return 0;
 	
-	message->vel = 1;
-	message->note = 60;
+	while(true) {
+		midi.getMessage(&rtmsg);
+		if(rtmsg.size() == 0)
+			return 0;
 	
-	return 1;
+		int type = (rtmsg[0] & 0xf0) >> 4;
+	
+		if(type == MIDI_NOTE_OFF || (type == MIDI_NOTE_ON && rtmsg[2] == 0)) {
+			message->vel = 0;
+		} else if(type == MIDI_NOTE_ON) {
+			message->vel = rtmsg[2] / 127.0;
+		} else {
+			continue; // unrecognized
+		}
+		
+		message->channel = rtmsg[0] & 0x0f;
+		message->note = rtmsg[1];
+		
+		return 1;
+	}
 }
 
 } // extern "C"
