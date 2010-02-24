@@ -180,6 +180,7 @@ main(int argc, char *argv[])
 	int num_scripts, scripts_added;
 	int silent_mode = 0; /* whether to execute without using the sound card */
 	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
+	int midi_port = 0;
 	
 	vm.ckvm = ckvm_create(error_callback);
 	if(vm.ckvm == NULL) {
@@ -189,7 +190,7 @@ main(int argc, char *argv[])
 	
 	vm.audio = NULL;
 	
-	while((c = getopt(argc, (char ** const) argv, "hsa")) != -1)
+	while((c = getopt(argc, (char ** const) argv, "hsam:")) != -1)
 		switch(c) {
 		case 'h':
 			usage();
@@ -199,6 +200,9 @@ main(int argc, char *argv[])
 			break;
 		case 'a':
 			all_libs = 1;
+			break;
+		case 'm':
+			midi_port = atoi(optarg);
 			break;
 		}
 	
@@ -235,7 +239,7 @@ main(int argc, char *argv[])
 		
 	} else {
 		
-		if(!start_midi())
+		if(!start_midi(midi_port))
 			print_error("could not start MIDI"); /* not fatal */
 		
 		pthread_mutex_init(&vm.audio_done_mutex, NULL /* attr */);
@@ -269,7 +273,7 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	MidiMsg midiMsg;
 	
 	while(get_midi_message(&midiMsg)) {
-		printf("[ckv] got MIDI chan: %d note: %d vel: %f\n", midiMsg.channel, midiMsg.note, midiMsg.velocity);
+		printf("[ckv] got MIDI ctrl: %d bend: %d chan: %d note: %d vel: %f\n", midiMsg.control, midiMsg.pitch_bend, midiMsg.channel, midiMsg.note, midiMsg.velocity);
 	}
 	
 	ckva_fill_buffer(vm->audio, outputBuffer, inputBuffer, nFrames);

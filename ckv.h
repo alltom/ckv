@@ -19,12 +19,14 @@ void stop_audio(void);
 
 /* midi */
 typedef struct {
+	int control; /* control message? boolean */
+	int pitch_bend; /* pitch bend? boolean */
 	int channel;
 	int note;
 	float velocity;
 } MidiMsg;
 
-int start_midi();
+int start_midi(int port);
 int get_midi_message(MidiMsg *message);
 
 #endif
