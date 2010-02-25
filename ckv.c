@@ -2,6 +2,7 @@
 #include "ckv.h"
 #include "ckvm.h"
 #include "ckvaudio/audio.h"
+#include "ckvmidi/midi.h"
 #include "pq.h"
 
 #include <stdio.h>
@@ -14,6 +15,7 @@
 typedef struct VM {
 	CKVM ckvm;
 	CKVAudio audio;
+	CKVMIDI midi;
 	
 	pthread_mutex_t audio_done_mutex;
 	pthread_cond_t audio_done;
@@ -26,9 +28,11 @@ void
 usage(void)
 {
 	printf("usage: ckv [-has] [file ...]\n");
-	printf("  -h print this usage information\n");
-	printf("  -a load all Lua libraries (enough to shoot yourself in the foot), including file IO\n");
-	printf("  -s silent mode (no audio processing, non-real-time)\n");
+	printf("  -h     print this usage information\n");
+	printf("  -a     load all Lua libraries (enough to shoot yourself in the foot), including file IO\n");
+	printf("  -s     silent mode (no audio processing, non-real-time)\n");
+	printf("  -m N   listen on MIDI port N (without -m defaults to 0)\n");
+	printf("  -m no  disable real-time MIDI input\n");
 }
 
 static
@@ -189,6 +193,7 @@ main(int argc, char *argv[])
 	}
 	
 	vm.audio = NULL;
+	vm.midi = NULL;
 	
 	while((c = getopt(argc, (char ** const) argv, "hsam:")) != -1)
 		switch(c) {
@@ -202,7 +207,10 @@ main(int argc, char *argv[])
 			all_libs = 1;
 			break;
 		case 'm':
-			midi_port = atoi(optarg);
+			if(strcmp(optarg, "no") == 0)
+				midi_port = -1; /* disable MIDI input */
+			else
+				midi_port = atoi(optarg);
 			break;
 		}
 	
@@ -214,6 +222,14 @@ main(int argc, char *argv[])
 		vm.audio = ckva_open(vm.ckvm, 44100, 2);
 		if(vm.audio == NULL) {
 			print_error("could not initialize ckv audio");
+			return EXIT_FAILURE;
+		}
+	}
+	
+	if(midi_port != -1) {
+		vm.midi = ckvmidi_open(vm.ckvm);
+		if(vm.midi == NULL) {
+			print_error("could not initialize MIDI input");
 			return EXIT_FAILURE;
 		}
 	}
@@ -239,7 +255,7 @@ main(int argc, char *argv[])
 		
 	} else {
 		
-		if(!start_midi(midi_port))
+		if(midi_port != -1 && !start_midi(midi_port))
 			print_error("could not start MIDI"); /* not fatal */
 		
 		pthread_mutex_init(&vm.audio_done_mutex, NULL /* attr */);
