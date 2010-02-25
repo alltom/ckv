@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 2.6)
 project (ckv)
-add_subdirectory (audio)
+add_subdirectory (ckvaudio)
 
 add_executable (ckv ckv ckvm luabaselite pq rtaudio_wrapper)
 

@@ -25,10 +25,10 @@ CFLAGS = -g -pedantic -Wall -O3 $(EXTRA_CFLAGS)
 LDFLAGS = -llua
 LDFLAGS += $(AUDIO_LDFLAGS) $(MIDI_LDFLAGS) # audio
 LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz $(FFMPEG_LDFLAGS) # sndin
-UGEN_OBJECTS=audio/ugen/delay.o audio/ugen/follower.o audio/ugen/gain.o \
-             audio/ugen/impulse.o audio/ugen/noise.o audio/ugen/osc.o \
-             audio/ugen/sndin.o audio/ugen/step.o audio/ugen/ugen.o
-AUDIO_OBJECTS=audio/audio.o $(UGEN_OBJECTS)
+UGEN_OBJECTS=ckvaudio/ugen/delay.o ckvaudio/ugen/follower.o ckvaudio/ugen/gain.o \
+             ckvaudio/ugen/impulse.o ckvaudio/ugen/noise.o ckvaudio/ugen/osc.o \
+             ckvaudio/ugen/sndin.o ckvaudio/ugen/step.o ckvaudio/ugen/ugen.o
+AUDIO_OBJECTS=ckvaudio/audio.o $(UGEN_OBJECTS)
 MIDI_OBJECTS=rtmidi/RtMidi.o
 OBJECTS = ckv.o ckvm.o luabaselite.o $(AUDIO_OBJECTS) rtaudio_wrapper.o $(MIDI_OBJECTS) rtmidi_wrapper.o pq.o
 EXECUTABLE=ckv
@@ -45,8 +45,8 @@ rtmidi_wrapper.o: rtmidi_wrapper.cpp
 rtaudio_wrapper.o: rtaudio_wrapper.cpp
 	g++ $(CFLAGS) -c -o rtaudio_wrapper.o rtaudio_wrapper.cpp $(AUDIO_DEFINE)
 
-audio/ugen/sndin.o: audio/ugen/sndin.c
-	$(CC) -g -Wall -O3 -c -o audio/ugen/sndin.o audio/ugen/sndin.c
+ckvaudio/ugen/sndin.o: ckvaudio/ugen/sndin.c
+	$(CC) -g -Wall -O3 -c -o ckvaudio/ugen/sndin.o ckvaudio/ugen/sndin.c
 
 clean:
 	rm -f *.o */*.o */*/*.o $(EXECUTABLE)

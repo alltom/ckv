@@ -1,7 +1,7 @@
 
 #include "ckv.h"
 #include "ckvm.h"
-#include "audio/audio.h"
+#include "ckvaudio/audio.h"
 #include "pq.h"
 
 #include <stdio.h>
