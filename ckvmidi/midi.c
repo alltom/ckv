@@ -3,14 +3,14 @@
 
 #include <stdlib.h>
 
-struct CKVMIDI {
+struct _CKVMIDI {
 	CKVM vm;
 };
 
 CKVMIDI
 ckvmidi_open(CKVM vm)
 {
-	CKVMIDI midi = (CKVMIDI) malloc(sizeof(struct CKVMIDI));
+	CKVMIDI midi = (CKVMIDI) malloc(sizeof(struct _CKVMIDI));
 	return midi;
 }
 

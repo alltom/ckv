@@ -8,21 +8,21 @@
 #define THREADS_TABLE "threads"
 #define ERROR_MESSAGE_BUFFER_SIZE (1024)
 
-typedef struct CKVM_Thread {
+typedef struct _CKVM_Thread {
 	lua_State *L;
 	CKVM vm;
-	struct Scheduler *scheduler;
+	struct _Scheduler *scheduler;
 } Thread;
 
-typedef struct Scheduler {
+typedef struct _Scheduler {
 	PQ queue;
 	double now; /* invariant: every scheduler's now always refers to the same time, with different units */
 	            /* invariant: now is always updated before any thread is resumed */
 	double rate;
-	struct Scheduler *next; /* next in linked list of schedulers */
+	struct _Scheduler *next; /* next in linked list of schedulers */
 } Scheduler;
 
-typedef struct CKVM {
+typedef struct _CKVM {
 	int running;
 	double now;
 	Scheduler *scheduler; /* invariant: first scheduler is always real time (audio sample units) */
@@ -33,7 +33,7 @@ typedef struct CKVM {
 	ErrorCallback err_callback;
 } VM;
 
-typedef struct Event {
+typedef struct _Event {
 	PQ waiting;
 } Event;
 
@@ -94,7 +94,7 @@ terror(VM *vm, lua_State *L, const char *fmt, ...)
 CKVM
 ckvm_create(ErrorCallback err_callback)
 {
-	VM *vm = malloc(sizeof(VM));
+	VM *vm = (VM *)malloc(sizeof(struct _CKVM));
 	if(vm == NULL) {
 		return NULL;
 	}
@@ -211,7 +211,7 @@ ckvm_get_thread(lua_State *L)
 	
 	lua_pushlightuserdata(L, L);
 	lua_gettable(L, LUA_REGISTRYINDEX);
-	thread = lua_touserdata(L, -1);
+	thread = (Thread *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
 	return thread;
@@ -238,7 +238,7 @@ ckvm_run_one(CKVM vm)
 		return;
 	
 	new_now = real_time(vm, scheduler, queue_min_priority(scheduler->queue));
-	thread = remove_queue_min(scheduler->queue);
+	thread = (Thread *)remove_queue_min(scheduler->queue);
 	fast_forward(vm, new_now);
 	run_thread(vm, thread);
 }
@@ -256,7 +256,7 @@ ckvm_run_until(CKVM vm, double new_now)
 			break;
 
 		now = real_time(vm, scheduler, queue_min_priority(scheduler->queue));
-		thread = queue_min(scheduler->queue);
+		thread = (Thread *)queue_min(scheduler->queue);
 		
 		if(now > new_now)
 			break;
@@ -282,7 +282,7 @@ ckvm_run(CKVM vm)
 			return;
 
 		new_now = real_time(vm, scheduler, queue_min_priority(scheduler->queue));
-		thread = remove_queue_min(scheduler->queue);
+		thread = (Thread *)remove_queue_min(scheduler->queue);
 		
 		fast_forward(vm, new_now);
 		run_thread(vm, thread);
@@ -337,7 +337,7 @@ ckvm_push_new_scheduler(lua_State *L, double rate)
 int
 ckvm_set_scheduler_rate(lua_State *L, int stack_index, double rate)
 {
-	Scheduler *scheduler = lua_touserdata(L, stack_index);
+	Scheduler *scheduler = (Scheduler *)lua_touserdata(L, stack_index);
 	
 	if(rate <= 0)
 		return -1;
@@ -349,7 +349,7 @@ ckvm_set_scheduler_rate(lua_State *L, int stack_index, double rate)
 double
 ckvm_get_scheduler_rate(lua_State *L, int stack_index)
 {
-	Scheduler *scheduler = lua_touserdata(L, stack_index);
+	Scheduler *scheduler = (Scheduler *)lua_touserdata(L, stack_index);
 	return scheduler->rate;
 }
 
@@ -365,7 +365,7 @@ ckv_now(lua_State *L)
 	Thread *thread = ckvm_get_thread(L);
 	Scheduler *scheduler;
 	
-	scheduler = lua_touserdata(L, 1);
+	scheduler = (Scheduler *)lua_touserdata(L, 1);
 	if(scheduler == NULL)
 		scheduler = thread->vm->scheduler;
 	
@@ -459,11 +459,11 @@ ckv_event_broadcast(lua_State *L)
 	now = ckvm_get_thread(L)->vm->scheduler->now;
 	
 	lua_getfield(L, 1, "obj");
-	ev = lua_touserdata(L, -1);
+	ev = (Event *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
 	while(!queue_empty(ev->waiting)) {
-		Thread *thread = remove_queue_min(ev->waiting);
+		Thread *thread = (Thread *)remove_queue_min(ev->waiting);
 		if(!enqueue_thread(thread->vm->scheduler, thread->vm->scheduler->now, thread))
 			terror(thread->vm, thread->L, "could not insert woken thread into scheduler");
 		thread->vm->num_sleeping_threads--;
@@ -480,7 +480,7 @@ ckv_event_new(lua_State *L)
 	
 	luaL_checktype(L, 1, LUA_TTABLE); /* Event */
 	
-	ev = malloc(sizeof(Event));
+	ev = (Event *)malloc(sizeof(struct _Event));
 	if(ev == NULL) {
 		lua_pushnil(L);
 		return 1;
@@ -539,7 +539,7 @@ static
 Scheduler *
 new_scheduler(double now, double rate)
 {
-	Scheduler *scheduler = malloc(sizeof(Scheduler));
+	Scheduler *scheduler = (Scheduler *)malloc(sizeof(struct _Scheduler));
 	if(!scheduler)
 		return NULL;
 	
@@ -603,7 +603,7 @@ new_thread(VM *vm, lua_State *parentL)
 	lua_State *L; /* new thread state */
 	Thread *thread;
 	
-	thread = malloc(sizeof(Thread));
+	thread = (Thread *)malloc(sizeof(Thread));
 	if(!thread)
 		return NULL;
 	
@@ -673,7 +673,7 @@ yield_time(CKVM vm, Thread *thread)
 	amount = luaL_checknumber(thread->L, 1);
 	
 	if(lua_type(thread->L, 2) == LUA_TLIGHTUSERDATA)
-		scheduler = lua_touserdata(thread->L, 2);
+		scheduler = (Scheduler *)lua_touserdata(thread->L, 2);
 	else
 		scheduler = thread->vm->scheduler;
 	
@@ -698,7 +698,7 @@ yield_on_event(CKVM vm, Thread *thread)
 	
 	lua_pushstring(thread->L, "obj");
 	lua_rawget(thread->L, 1);
-	ev = lua_touserdata(thread->L, -1);
+	ev = (Event *)lua_touserdata(thread->L, -1);
 	lua_pop(thread->L, 1);
 	
 	if(ev == NULL) {

@@ -4,7 +4,7 @@
 
 #include "../ckvm.h"
 
-typedef struct CKVMIDI *CKVMIDI;
+typedef struct _CKVMIDI *CKVMIDI;
 
 CKVMIDI ckvmidi_open(CKVM vm);
 void ckvmidi_dispatch_note_on(int channel, int note, float velocity);

@@ -6,7 +6,7 @@
 
 #define DELAY_BUFFER_PAD_FACTOR (2)
 
-typedef struct Delay {
+typedef struct _Delay {
 	double *buffer;
 	int delay_length;
 	int ptr;
@@ -25,7 +25,7 @@ ckv_delay_tick(lua_State *L)
 	luaL_checktype(L, 1, LUA_TTABLE);
 	
 	lua_getfield(L, -1, "obj");
-	delay = lua_touserdata(L, -1);
+	delay = (Delay *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
 	last_value = 0.0;
@@ -60,7 +60,7 @@ static
 int
 ckv_delay_release(lua_State *L)
 {
-	Delay *delay = lua_touserdata(L, 1);
+	Delay *delay = (Delay *)lua_touserdata(L, 1);
 	free(delay->buffer);
 	free(delay);
 	
@@ -83,7 +83,7 @@ ckv_delay_new(lua_State *L)
 	Delay *delay;
 	lua_Number delay_amount = 0;
 	
-	delay = malloc(sizeof(Delay));
+	delay = (Delay *)malloc(sizeof(struct _Delay));
 	if(delay == NULL) {
 		fprintf(stderr, "[ckv] memory error allocating Delay\n");
 		return 0;
@@ -103,7 +103,7 @@ ckv_delay_new(lua_State *L)
 	delay->size = delay_amount * DELAY_BUFFER_PAD_FACTOR;
 	delay->ptr = 0;
 	
-	delay->buffer = malloc(sizeof(lua_Number) * delay->size);
+	delay->buffer = (lua_Number *)malloc(sizeof(lua_Number) * delay->size);
 	if(delay->buffer == NULL) {
 		fprintf(stderr, "[ckv] memory error allocating Delay buffer\n");
 		free(delay);

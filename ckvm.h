@@ -6,8 +6,8 @@
 #include "lualib.h"
 #include "lauxlib.h"
 
-typedef struct CKVM *CKVM;
-typedef struct CKVM_Thread *CKVM_Thread;
+typedef struct _CKVM *CKVM;
+typedef struct _CKVM_Thread *CKVM_Thread;
 
 typedef void (*ErrorCallback)(CKVM vm, const char *message);
 

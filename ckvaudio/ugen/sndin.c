@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-typedef struct SndIn {
+typedef struct _SndIn {
 	AVFormatContext *pFormatCtx;
 	AVCodecContext *pCodecCtx;
 	int audioStream; /* which stream is audio */
@@ -25,7 +25,7 @@ static
 int
 sndin_open(SndIn *sndin, const char *filename)
 {
-	int i;
+	unsigned int i;
 	AVCodec *pCodec;
 
 	/* Register all formats and codecs */
@@ -141,7 +141,7 @@ ckv_sndin_tick(lua_State *L)
 	luaL_checktype(L, 1, LUA_TTABLE);
 	
 	lua_getfield(L, -1, "obj");
-	sndin = lua_touserdata(L, -1);
+	sndin = (SndIn *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
 	if(sndin->closed || sndin->eof)
@@ -182,7 +182,7 @@ ckv_sndin_close(lua_State *L)
 	SndIn *sndin;
 	
 	lua_getfield(L, -1, "obj");
-	sndin = lua_touserdata(L, -1);
+	sndin = (SndIn *)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	
 	if(!sndin->closed)
@@ -195,7 +195,7 @@ static
 int
 ckv_sndin_release(lua_State *L)
 {
-	SndIn *sndin = lua_touserdata(L, 1);
+	SndIn *sndin = (SndIn *)lua_touserdata(L, 1);
 	sndin_close(sndin);
 	free(sndin);
 	
@@ -221,7 +221,7 @@ ckv_sndin_new(lua_State *L)
 	SndIn *sndin;
 	const char *filename;
 	
-	sndin = malloc(sizeof(SndIn));
+	sndin = (SndIn *)malloc(sizeof(struct _SndIn));
 	if(sndin == NULL) {
 		fprintf(stderr, "[ckv] memory error allocating SndIn\n");
 		return 0;

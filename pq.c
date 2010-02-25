@@ -9,7 +9,7 @@ typedef struct {
 	int floats; /* if true, always swims to top */
 } PQItem;
 
-struct PQ {
+struct _PQ {
 	int count, capacity;
 	PQItem *items; /* stored starting at index 1 */
 };
@@ -21,12 +21,12 @@ static void sink(PQ q, int k);
 PQ
 new_queue(int capacity)
 {
-	PQ q = malloc(sizeof(PQ));
+	PQ q = (PQ)malloc(sizeof(struct _PQ));
 	
 	if(q == NULL)
 		return NULL;
 	
-	q->items = malloc(sizeof(PQItem) * (capacity + 1));
+	q->items = (PQItem *)malloc(sizeof(PQItem) * (capacity + 1));
 	
 	if(q->items == NULL) {
 		free(q);
@@ -57,7 +57,7 @@ queue_insert(PQ q, double priority, void *data)
 	if(q->count == q->capacity) {
 		int new_capacity = q->capacity == 0 ? 1 : q->capacity * 2;
 		
-		PQItem *new_items = malloc(sizeof(PQItem) * (new_capacity + 1));
+		PQItem *new_items = (PQItem *)malloc(sizeof(PQItem) * (new_capacity + 1));
 		
 		if(new_items == NULL)
 			return 0;

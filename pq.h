@@ -3,7 +3,7 @@
 #define PQ_H
 
 /* a minimum priority queue */
-typedef struct PQ *PQ;
+typedef struct _PQ *PQ;
 
 PQ new_queue(int capacity);
 void free_queue(PQ q);

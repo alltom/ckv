@@ -7,7 +7,7 @@
 extern int open_ckvugen(lua_State *L);
 static void open_audio_libs(CKVAudio audio, CKVM vm);
 
-struct CKVAudio {
+struct _CKVAudio {
 	CKVM vm;
 	unsigned int now;
 	int sample_rate;
@@ -17,7 +17,7 @@ struct CKVAudio {
 CKVAudio
 ckva_open(CKVM vm, int sample_rate, int channels)
 {
-	CKVAudio audio = malloc(sizeof(struct CKVAudio));
+	CKVAudio audio = (CKVAudio)malloc(sizeof(struct _CKVAudio));
 	audio->vm = vm;
 	audio->now = (int) ckvm_now(vm);
 	audio->sample_rate = sample_rate;
@@ -44,7 +44,7 @@ void
 ckva_fill_buffer(CKVAudio audio, double *outputBuffer, double *inputBuffer, int frames)
 {
 	lua_State *L;
-	unsigned int i, c;
+	int i, c;
 	int oldtop, adc, dac, sinks, ugen_graph, tick_all;
 
 	if(!ckvm_running(audio->vm)) {
