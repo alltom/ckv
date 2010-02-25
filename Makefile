@@ -25,13 +25,12 @@ CFLAGS = -g -pedantic -Wall -O3 $(EXTRA_CFLAGS)
 LDFLAGS = -llua
 LDFLAGS += $(AUDIO_LDFLAGS) $(MIDI_LDFLAGS) # audio
 LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz $(FFMPEG_LDFLAGS) # sndin
-UGEN_OBJECTS=ckvaudio/ugen/delay.o ckvaudio/ugen/follower.o ckvaudio/ugen/gain.o \
-             ckvaudio/ugen/impulse.o ckvaudio/ugen/noise.o ckvaudio/ugen/osc.o \
-             ckvaudio/ugen/sndin.o ckvaudio/ugen/step.o ckvaudio/ugen/ugen.o
-AUDIO_OBJECTS=ckvaudio/audio.o $(UGEN_OBJECTS)
-MIDI_OBJECTS=ckvmidi/midi.o
-RTMIDI_OBJECTS=rtmidi/RtMidi.o
-OBJECTS = ckv.o ckvm.o luabaselite.o $(AUDIO_OBJECTS) rtaudio_wrapper.o $(MIDI_OBJECTS) $(RTMIDI_OBJECTS) rtmidi_wrapper.o pq.o
+OBJECTS = ckv.o ckvm.o luabaselite.o pq.o
+OBJECTS += ckvaudio/audio.o rtaudio_wrapper.o \
+           ckvaudio/ugen/delay.o ckvaudio/ugen/follower.o ckvaudio/ugen/gain.o \
+           ckvaudio/ugen/impulse.o ckvaudio/ugen/noise.o ckvaudio/ugen/osc.o \
+           ckvaudio/ugen/sndin.o ckvaudio/ugen/step.o ckvaudio/ugen/ugen.o
+OBJECTS += ckvmidi/midi.o rtmidi_wrapper.o rtmidi/RtMidi.o
 EXECUTABLE=ckv
 
 $(EXECUTABLE): $(OBJECTS)
