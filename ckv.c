@@ -289,7 +289,12 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	MidiMsg midiMsg;
 	
 	while(get_midi_message(&midiMsg)) {
-		printf("[ckv] got MIDI ctrl: %d bend: %d chan: %d note: %d vel: %f\n", midiMsg.control, midiMsg.pitch_bend, midiMsg.channel, midiMsg.note, midiMsg.velocity);
+		if(!midiMsg.control && !midiMsg.pitch_bend) {
+			if(midiMsg.velocity > 0)
+				ckvmidi_dispatch_note_on(vm->midi, midiMsg.channel, midiMsg.note, midiMsg.velocity);
+			else
+				ckvmidi_dispatch_note_off(vm->midi, midiMsg.channel, midiMsg.note);
+		}
 	}
 	
 	ckva_fill_buffer(vm->audio, outputBuffer, inputBuffer, nFrames);
