@@ -5,6 +5,7 @@
 #include "../ckvm.h"
 
 typedef struct CKVAudio *CKVAudio;
+
 CKVAudio ckva_open(CKVM vm, int sample_rate, int channels);
 int ckva_sample_rate(CKVAudio audio);
 int ckva_channels(CKVAudio audio);

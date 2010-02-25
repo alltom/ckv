@@ -29,8 +29,9 @@ UGEN_OBJECTS=ckvaudio/ugen/delay.o ckvaudio/ugen/follower.o ckvaudio/ugen/gain.o
              ckvaudio/ugen/impulse.o ckvaudio/ugen/noise.o ckvaudio/ugen/osc.o \
              ckvaudio/ugen/sndin.o ckvaudio/ugen/step.o ckvaudio/ugen/ugen.o
 AUDIO_OBJECTS=ckvaudio/audio.o $(UGEN_OBJECTS)
-MIDI_OBJECTS=rtmidi/RtMidi.o
-OBJECTS = ckv.o ckvm.o luabaselite.o $(AUDIO_OBJECTS) rtaudio_wrapper.o $(MIDI_OBJECTS) rtmidi_wrapper.o pq.o
+MIDI_OBJECTS=ckvmidi/midi.o
+RTMIDI_OBJECTS=rtmidi/RtMidi.o
+OBJECTS = ckv.o ckvm.o luabaselite.o $(AUDIO_OBJECTS) rtaudio_wrapper.o $(MIDI_OBJECTS) $(RTMIDI_OBJECTS) rtmidi_wrapper.o pq.o
 EXECUTABLE=ckv
 
 $(EXECUTABLE): $(OBJECTS)
