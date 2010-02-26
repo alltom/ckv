@@ -6,6 +6,7 @@
 
 extern int open_ckvugen(lua_State *L);
 static void open_audio_libs(CKVAudio audio, CKVM vm);
+static int ckv_audio_ffwd(lua_State *L);
 
 struct _CKVAudio {
 	CKVM vm;
@@ -17,13 +18,20 @@ struct _CKVAudio {
 CKVAudio
 ckva_open(CKVM vm, int sample_rate, int channels)
 {
-	CKVAudio audio = (CKVAudio)malloc(sizeof(struct _CKVAudio));
+	lua_State *L;
+	CKVAudio audio;
+	
+	audio = (CKVAudio)malloc(sizeof(struct _CKVAudio));
 	audio->vm = vm;
 	audio->now = (int) ckvm_now(vm);
 	audio->sample_rate = sample_rate;
 	audio->channels = channels;
 	
 	open_audio_libs(audio, vm);
+	
+	L = ckvm_global_state(vm);
+	lua_pushlightuserdata(L, audio);
+	lua_setfield(L, LUA_REGISTRYINDEX, "audio");
 	
 	return audio;
 }
@@ -161,4 +169,28 @@ open_audio_libs(CKVAudio audio, CKVM vm)
 	lua_pushnumber(L, audio->sample_rate * 60 * 60 * 24 * 7 * 2);
 	lua_setglobal(L, "fortnight");
 	lua_setglobal(L, "fortnights");
+	
+	/* function for fast-forwarding in audio stream */
+	lua_pushcfunction(L, ckv_audio_ffwd); lua_setglobal(L, "audio_ffwd");
+}
+
+static
+int
+ckv_audio_ffwd(lua_State *L)
+{
+	CKVAudio audio;
+	lua_Number amt;
+	
+	amt = luaL_checknumber(L, 1);
+	if(amt < 0) {
+		fprintf(stderr, "[ckv] attempt to audio_ffwd with negative value\n");
+		return 0;
+	}
+	
+	lua_getfield(L, LUA_REGISTRYINDEX, "audio");
+	audio = lua_touserdata(L, -1);
+	audio->now += amt;
+	
+	lua_pushnumber(L, amt);
+	return 1;
 }
