@@ -183,6 +183,7 @@ main(int argc, char *argv[])
 	int num_scripts, scripts_added;
 	int silent_mode = 0; /* whether to execute without using the sound card */
 	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
+	int sample_rate = 44100;
 	int midi_port = -1;
 	
 	vm.ckvm = ckvm_create(error_callback);
@@ -200,7 +201,7 @@ main(int argc, char *argv[])
 			usage();
 			return EXIT_SUCCESS;
 		case 's':
-			silent_mode = 1;
+			silent_mode++; /* if used more than once, squelches time printout */
 			break;
 		case 'a':
 			all_libs = 1;
@@ -214,12 +215,10 @@ main(int argc, char *argv[])
 	
 	open_base_libs(&vm, all_libs);
 	
-	if(!silent_mode) {
-		vm.audio = ckva_open(vm.ckvm, 44100, 2);
-		if(vm.audio == NULL) {
-			print_error("could not initialize ckv audio");
-			return EXIT_FAILURE;
-		}
+	vm.audio = ckva_open(vm.ckvm, sample_rate, 2, silent_mode == 1);
+	if(vm.audio == NULL) {
+		print_error("could not initialize ckv audio");
+		return EXIT_FAILURE;
 	}
 	
 	if(midi_port != -1) {
@@ -239,14 +238,20 @@ main(int argc, char *argv[])
 		if(ckvm_add_thread(vm.ckvm, argv[i]))
 			scripts_added++;
 	
-	if(scripts_added == 0 && silent_mode)
-		return num_scripts == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
-	
 	/* begin execution */
 	
 	if(silent_mode) {
 		
-		ckvm_run(vm.ckvm);
+		int second;
+		double fakeMicBuffer[512], fakeSpeakerBuffer[512];
+		for(second = 0; ; second++) {
+			ckva_fill_buffer(vm.audio, fakeSpeakerBuffer, fakeMicBuffer, 512);
+			
+			if(!ckvm_running(vm.ckvm))
+				break;
+		}
+		
+		ckva_destroy(vm.audio);
 		ckvm_destroy(vm.ckvm);
 		
 	} else {
@@ -259,7 +264,7 @@ main(int argc, char *argv[])
 		
 		pthread_mutex_lock(&vm.audio_done_mutex);
 		
-		if(!start_audio(render_audio, ckva_sample_rate(vm.audio), &vm)) {
+		if(!start_audio(render_audio, sample_rate, &vm)) {
 			print_error("could not start audio");
 			return EXIT_FAILURE;
 		}
@@ -269,6 +274,7 @@ main(int argc, char *argv[])
 		pthread_mutex_unlock(&vm.audio_done_mutex);
 		
 		stop_audio();
+		ckva_destroy(vm.audio);
 		ckvm_destroy(vm.ckvm);
 		
 	}

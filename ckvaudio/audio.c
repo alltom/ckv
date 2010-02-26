@@ -14,10 +14,11 @@ struct _CKVAudio {
 	float silent_until;
 	int sample_rate;
 	int channels;
+	int print_time;
 };
 
 CKVAudio
-ckva_open(CKVM vm, int sample_rate, int channels)
+ckva_open(CKVM vm, int sample_rate, int channels, int print_time)
 {
 	lua_State *L;
 	CKVAudio audio;
@@ -28,6 +29,7 @@ ckva_open(CKVM vm, int sample_rate, int channels)
 	audio->silent_until = 0;
 	audio->sample_rate = sample_rate;
 	audio->channels = channels;
+	audio->print_time = print_time;
 	
 	open_audio_libs(audio, vm);
 	
@@ -115,6 +117,10 @@ ckva_fill_buffer(CKVAudio audio, double *outputBuffer, double *inputBuffer, int 
 		lua_pop(L, 1);
 
 		audio->now++;
+		if(audio->print_time && audio->now % audio->sample_rate == 0) {
+			int second = audio->now / audio->sample_rate;
+			fprintf(stderr, "[ckv] %02d:%02d:%02d\n", (int) (second / 60.0 / 60.0), (int) (second / 60.0) % 60, second % 60);
+		}
 		
 		if(audio->now >= audio->silent_until)
 			i++;
