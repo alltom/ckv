@@ -11,6 +11,7 @@ static int ckv_audio_ffwd(lua_State *L);
 struct _CKVAudio {
 	CKVM vm;
 	unsigned int now;
+	float silent_until;
 	int sample_rate;
 	int channels;
 };
@@ -24,6 +25,7 @@ ckva_open(CKVM vm, int sample_rate, int channels)
 	audio = (CKVAudio)malloc(sizeof(struct _CKVAudio));
 	audio->vm = vm;
 	audio->now = (int) ckvm_now(vm);
+	audio->silent_until = 0;
 	audio->sample_rate = sample_rate;
 	audio->channels = channels;
 	
@@ -86,7 +88,7 @@ ckva_fill_buffer(CKVAudio audio, double *outputBuffer, double *inputBuffer, int 
 	lua_getfield(L, ugen_graph, "tick_all");
 	tick_all = lua_gettop(L);
 
-	for(i = 0; i < frames; i++) {
+	for(i = 0; i < frames; ) {
 		ckvm_run_until(audio->vm, audio->now);
 
 		if(!ckvm_running(audio->vm)) {
@@ -113,6 +115,9 @@ ckva_fill_buffer(CKVAudio audio, double *outputBuffer, double *inputBuffer, int 
 		lua_pop(L, 1);
 
 		audio->now++;
+		
+		if(audio->now >= audio->silent_until)
+			i++;
 	}
 
 	lua_settop(L, oldtop);
@@ -189,7 +194,8 @@ ckv_audio_ffwd(lua_State *L)
 	
 	lua_getfield(L, LUA_REGISTRYINDEX, "audio");
 	audio = lua_touserdata(L, -1);
-	audio->now += amt;
+	if(audio->silent_until < audio->now + amt)
+		audio->silent_until = audio->now + amt;
 	
 	lua_pushnumber(L, amt);
 	return 1;
