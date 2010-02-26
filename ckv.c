@@ -31,8 +31,7 @@ usage(void)
 	printf("  -h     print this usage information\n");
 	printf("  -a     load all Lua libraries (enough to shoot yourself in the foot), including file IO\n");
 	printf("  -s     silent mode (no audio processing, non-real-time)\n");
-	printf("  -m N   listen on MIDI port N (without -m defaults to 0)\n");
-	printf("  -m no  disable real-time MIDI input\n");
+	printf("  -m N   listen on MIDI port N\n");
 }
 
 static
@@ -184,7 +183,7 @@ main(int argc, char *argv[])
 	int num_scripts, scripts_added;
 	int silent_mode = 0; /* whether to execute without using the sound card */
 	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
-	int midi_port = 0;
+	int midi_port = -1;
 	
 	vm.ckvm = ckvm_create(error_callback);
 	if(vm.ckvm == NULL) {
@@ -207,10 +206,7 @@ main(int argc, char *argv[])
 			all_libs = 1;
 			break;
 		case 'm':
-			if(strcmp(optarg, "no") == 0)
-				midi_port = -1; /* disable MIDI input */
-			else
-				midi_port = atoi(optarg);
+			midi_port = atoi(optarg);
 			break;
 		}
 	
