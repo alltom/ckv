@@ -32,6 +32,7 @@ usage(void)
 	printf("  -a     load all Lua libraries (enough to shoot yourself in the foot), including file IO\n");
 	printf("  -s     silent mode (no audio processing, non-real-time)\n");
 	printf("  -m N   listen on MIDI port N\n");
+	printf("  -c V   hard clip audio output at +/-V\n");
 }
 
 static
@@ -182,6 +183,7 @@ main(int argc, char *argv[])
 	int i, c;
 	int num_scripts, scripts_added;
 	int silent_mode = 0; /* whether to execute without using the sound card */
+	double hard_clip = 0;
 	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
 	int sample_rate = 44100;
 	int midi_port = -1;
@@ -195,7 +197,7 @@ main(int argc, char *argv[])
 	vm.audio = NULL;
 	vm.midi = NULL;
 	
-	while((c = getopt(argc, (char ** const) argv, "hsam:")) != -1)
+	while((c = getopt(argc, (char ** const) argv, "hsam:c:")) != -1)
 		switch(c) {
 		case 'h':
 			usage();
@@ -209,13 +211,16 @@ main(int argc, char *argv[])
 		case 'm':
 			midi_port = atoi(optarg);
 			break;
+		case 'c':
+			hard_clip = atof(optarg);
+			break;
 		}
 	
 	/* libraries must be loaded before any scripts which use them */
 	
 	open_base_libs(&vm, all_libs);
 	
-	vm.audio = ckva_open(vm.ckvm, sample_rate, 2, silent_mode == 1);
+	vm.audio = ckva_open(vm.ckvm, sample_rate, 2, hard_clip, silent_mode == 1);
 	if(vm.audio == NULL) {
 		print_error("could not initialize ckv audio");
 		return EXIT_FAILURE;

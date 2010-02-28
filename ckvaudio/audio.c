@@ -14,11 +14,12 @@ struct _CKVAudio {
 	float silent_until;
 	int sample_rate;
 	int channels;
+	double hard_clip;
 	int print_time;
 };
 
 CKVAudio
-ckva_open(CKVM vm, int sample_rate, int channels, int print_time)
+ckva_open(CKVM vm, int sample_rate, int channels, double hard_clip, int print_time)
 {
 	lua_State *L;
 	CKVAudio audio;
@@ -29,6 +30,7 @@ ckva_open(CKVM vm, int sample_rate, int channels, int print_time)
 	audio->silent_until = 0;
 	audio->sample_rate = sample_rate;
 	audio->channels = channels;
+	audio->hard_clip = hard_clip;
 	audio->print_time = print_time;
 	
 	open_audio_libs(audio, vm);
@@ -58,6 +60,7 @@ ckva_fill_buffer(CKVAudio audio, double *outputBuffer, double *inputBuffer, int 
 	lua_State *L;
 	int i, c;
 	int oldtop, adc, dac, sinks, ugen_graph, tick_all;
+	double sample;
 
 	if(!ckvm_running(audio->vm)) {
 		for(i = 0; i < frames; i++)
@@ -110,11 +113,22 @@ ckva_fill_buffer(CKVAudio audio, double *outputBuffer, double *inputBuffer, int 
 		lua_pushvalue(L, sinks);
 		lua_call(L, 2, 0);
 
-		/* audio => speaker */
+		/* get sample */
 		lua_getfield(L, dac, "last");
-		outputBuffer[i * 2] = lua_tonumber(L, -1);
-		outputBuffer[i * 2 + 1] = outputBuffer[i * 2];
+		sample = lua_tonumber(L, -1);
 		lua_pop(L, 1);
+		
+		/* clip if requested */
+		if(audio->hard_clip > 0) {
+			if(sample > audio->hard_clip)
+				sample = audio->hard_clip;
+			if(sample < -audio->hard_clip)
+				sample = -audio->hard_clip;
+		}
+		
+		/* audio => speaker */
+		outputBuffer[i * 2] = sample;
+		outputBuffer[i * 2 + 1] = sample;
 
 		audio->now++;
 		if(audio->print_time && audio->now % audio->sample_rate == 0) {
