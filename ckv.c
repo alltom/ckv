@@ -50,6 +50,37 @@ error_callback(CKVM vm, const char *message)
 }
 
 static
+char *
+read_all(FILE *stream)
+{
+	char *buf, *buf2;
+	size_t size, used, nread;
+	
+	size = 1;
+	buf = malloc(size);
+	if(buf == NULL)
+		return NULL;
+	
+	used = 0;
+	while((nread = fread(buf + used, sizeof(char), size - used, stream)) > 0) {
+		used += nread;
+		
+		if(used == size) {
+			buf2 = realloc(buf, size * 2);
+			if(buf2 == NULL)
+				return buf;
+			
+			buf = buf2;
+			size *= 2;
+		}
+	}
+	
+	used += nread;
+	
+	return buf;
+}
+
+static
 int
 clock_set(lua_State *L)
 {
@@ -239,9 +270,23 @@ main(int argc, char *argv[])
 	num_scripts = argc - optind;
 	
 	scripts_added = 0;
-	for(i = optind; i < argc; i++)
-		if(ckvm_add_thread(vm.ckvm, argv[i]))
-			scripts_added++;
+	for(i = optind; i < argc; i++) {
+		if(strcmp(argv[i], "-") == 0) {
+			char *script = read_all(stdin);
+			if(script == NULL) {
+				print_error("could not read script from stdin");
+				continue;
+			}
+			
+			if(ckvm_add_thread_from_string(vm.ckvm, script))
+				scripts_added++;
+			
+			free(script);
+		} else {
+			if(ckvm_add_thread(vm.ckvm, argv[i]))
+				scripts_added++;
+		}
+	}
 	
 	/* begin execution */
 	

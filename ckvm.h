@@ -14,6 +14,7 @@ typedef void (*ErrorCallback)(CKVM vm, const char *message);
 CKVM ckvm_create(ErrorCallback err_callback);
 lua_State *ckvm_global_state(CKVM vm);
 CKVM_Thread ckvm_add_thread(CKVM vm, const char *filename);
+CKVM_Thread ckvm_add_thread_from_string(CKVM vm, const char *script);
 void ckvm_remove_thread(CKVM_Thread thread);
 CKVM_Thread ckvm_get_thread(lua_State *L);
 double ckvm_now(CKVM vm);

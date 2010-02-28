@@ -183,6 +183,38 @@ ckvm_add_thread(CKVM vm, const char *filename)
 	return thread;
 }
 
+CKVM_Thread
+ckvm_add_thread_from_string(CKVM vm, const char *script)
+{
+	Thread *thread;
+	
+	if(!vm->running)
+		return NULL;
+	
+	thread = new_thread(vm, vm->L);
+	
+	if(thread == NULL) {
+		error(vm, "could not allocate memory for thread");
+		return NULL;
+	}
+	
+	create_standalone_thread_env(thread);
+	
+	switch(luaL_loadstring(thread->L, script)) {
+	case LUA_ERRSYNTAX:
+		error(vm, "%s", lua_tostring(thread->L, -1));
+		break;
+	case LUA_ERRMEM:
+		error(vm, "memory allocation error while loading script");
+		break;
+	default:
+		if(!enqueue_thread(vm->scheduler, vm->scheduler->now, thread))
+			fprintf(stderr, "[ckv] thread could not add to thread queue\n");
+	}
+	
+	return thread;
+}
+
 void
 ckvm_remove_thread(CKVM_Thread thread)
 {
