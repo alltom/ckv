@@ -56,7 +56,7 @@ read_all(FILE *stream)
 	char *buf, *buf2;
 	size_t size, used, nread;
 	
-	size = 1;
+	size = 1024;
 	buf = malloc(size);
 	if(buf == NULL)
 		return NULL;
