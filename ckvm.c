@@ -477,6 +477,13 @@ static
 int
 ckv_yield(lua_State *L)
 {
+	Thread *thread = ckvm_get_thread(L);
+	
+	if(thread == &thread->vm->main_thread) {
+		error(thread->vm, "cannot yield in main thread");
+		return 0;
+	}
+	
 	return lua_yield(L, lua_gettop(L));
 }
 
