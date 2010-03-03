@@ -40,7 +40,7 @@ rtmidi/RtMidi.o: rtmidi/RtMidi.cpp rtmidi/RtError.h rtmidi/RtMidi.h
 	g++ -O3 -Wall $(MIDI_DEFINE) -c rtmidi/RtMidi.cpp -o rtmidi/RtMidi.o
 
 rtaudio/RtAudio.o: rtaudio/RtAudio.cpp rtaudio/RtError.h rtaudio/RtAudio.h
-	g++ -O3 -Wall -c rtaudio/RtAudio.cpp -o rtaudio/RtAudio.o
+	g++ -O3 -Wall -c rtaudio/RtAudio.cpp -o rtaudio/RtAudio.o $(AUDIO_DEFINE)
 
 rtmidi_wrapper.o: rtmidi_wrapper.cpp
 	g++ $(CFLAGS) -c -o rtmidi_wrapper.o rtmidi_wrapper.cpp $(MIDI_DEFINE)
