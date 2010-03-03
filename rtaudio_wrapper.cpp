@@ -2,7 +2,7 @@ extern "C" {
 #include "ckv.h"
 }
 
-#include <RtAudio.h>
+#include "rtaudio/RtAudio.h"
 
 static RtAudio audio;
 static AudioCallback callback;
