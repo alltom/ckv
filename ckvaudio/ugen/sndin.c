@@ -1,14 +1,13 @@
 
-#include "ugen.h"
-#include "../../ckvm.h"
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
+#include "../../ckvm.h"
+#include "ugen.h"
 
 typedef struct _SndIn {
 	AVFormatContext *pFormatCtx;
@@ -266,39 +265,6 @@ ckv_sndin_new(lua_State *L)
 	return 1; /* return self */
 }
 
-/* args: SndIn (class), filename */
-static
-int
-ckv_sndin_play(lua_State *L)
-{
-	luaL_checktype(L, 1, LUA_TSTRING);
-	
-	if(lua_gettop(L) == 1)
-		ckvm_pushstdglobal(L, "speaker");
-	
-	/* create SndIn obj */
-	lua_pushcfunction(L, ckv_sndin_new);
-	lua_pushvalue(L, 1); /* filename */
-	lua_call(L, 1 /* args */, 1 /* return values */);
-	
-	if(lua_isnil(L, -1))
-		return 0;
-	
-	ckvm_pushstdglobal(L, "fork");
-	(void) luaL_dostring(L,
-	"return function(sndin, dest)"
-	"  connect(sndin, dest);"
-	"  yield(sndin.duration);"
-	"  disconnect(sndin, dest);"
-	"end"
-	);
-	lua_pushvalue(L, -3); /* SndIn created above */
-	lua_pushvalue(L, 2); /* dest ugen */
-	lua_call(L, 3 /* args */, 1 /* return values */);
-	
-	return 1; /* return forked thread */
-}
-
 /* LIBRARY REGISTRATION */
 
 int
@@ -307,8 +273,17 @@ open_ugen_sndin(lua_State *L)
 	lua_pushcfunction(L, ckv_sndin_new);
 	lua_setglobal(L, "SndIn");
 	
-	lua_pushcfunction(L, ckv_sndin_play);
-	lua_setglobal(L, "play");
+	(void) luaL_dostring(L,
+	"function play(filename, dest)"
+	"  fork(function()"
+	"    sndin = SndIn(filename);"
+	"    dest = dest or speaker;"
+	"    connect(sndin, dest);"
+	"    yield(sndin.duration);"
+	"    disconnect(sndin, dest);"
+	"  end)"
+	"end"
+	);
 	
 	return 0;
 }
