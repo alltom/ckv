@@ -9,6 +9,7 @@ open_ugen_impulse(lua_State *L)
 	(void) luaL_dostring(L,
 	"function Impulse()"
 	"  return {"
+	"    last = 0.0,"
 	"    next = 0.0,"
 	"    tick = function(self)"
 	"      self.last = self.next;"
