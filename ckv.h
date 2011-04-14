@@ -6,10 +6,10 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
-/* open ckv-specific lua libraries */
-int open_luabaselite(lua_State *L);
+/* luabaselite.c */
+int open_luabaselite(lua_State *L); /* open ckv-specific lua libraries */
 
-/* audio */
+/* rtaudio_wrapper.cpp */
 typedef void (*AudioCallback)(double *outputBuffer, double *inputBuffer,
                               unsigned int nFrames,
                               double streamTime,
@@ -17,7 +17,7 @@ typedef void (*AudioCallback)(double *outputBuffer, double *inputBuffer,
 int start_audio(AudioCallback callback, int sample_rate, void *data);
 void stop_audio(void);
 
-/* midi */
+/* rtmidi_wrapper.cpp */
 typedef struct {
 	int control; /* control message? boolean */
 	int pitch_bend; /* pitch bend? boolean */

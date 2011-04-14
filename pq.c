@@ -1,7 +1,7 @@
 
-#include "pq.h"
-
 #include <stdlib.h>
+
+#include "pq.h"
 
 typedef struct {
 	double priority;
@@ -71,30 +71,13 @@ queue_insert(PQ q, double priority, void *data)
 		q->capacity = new_capacity;
 	}
 	
-	q->items[++q->count].priority = priority;
+	q->count++;
+	q->items[q->count].priority = priority;
 	q->items[q->count].data = data;
 	q->items[q->count].floats = 0;
 	swim(q, q->count);
 	
 	return 1;
-}
-
-void *
-queue_min(PQ q)
-{
-	if(q->count > 0)
-		return q->items[1].data;
-	
-	return NULL;
-}
-
-double
-queue_min_priority(PQ q)
-{
-	if(q->count > 0)
-		return q->items[1].priority;
-	
-	return -1;
 }
 
 void *
@@ -125,6 +108,24 @@ remove_queue_items(PQ q, void *data)
 			remove_queue_min(q);
 		}
 	}
+}
+
+void *
+queue_min(PQ q)
+{
+	if(q->count > 0)
+		return q->items[1].data;
+	
+	return NULL;
+}
+
+double
+queue_min_priority(PQ q)
+{
+	if(q->count > 0)
+		return q->items[1].priority;
+	
+	return -1;
 }
 
 int

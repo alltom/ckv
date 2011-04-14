@@ -2,12 +2,11 @@
 /*
 Lua's base library contains a bunch of stuff I'd rather
 not have available by default (dofile, setfenv, coroutine)
-because they break the sandbox we try to create. The safe
-stuff is lifted from Lua's code (see the license below)
-almost exactly.
+because they break the sandbox ckv tries to create. The safe
+parts of Lua's standard library are reproduced in this file
+almost exactly, and are covered under the license below.
 
-The full library can be loaded by passing -a to ckv, so
-this shouldn't be a big deal.
+All the unsafe libraries can be loaded by passing -a to ckv.
 */
 
 /*
@@ -38,9 +37,10 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#include <stdlib.h>
+
 #include "ckv.h"
 
-#include <stdlib.h>
 
 static
 int

@@ -1,9 +1,18 @@
 
-#include "ugen.h"
-#include "../../ckvm.h"
 #include <stdlib.h>
 #include <math.h>
 
+#include "../../ckvm.h"
+#include "ugen.h"
+
+
+/*
+the amount size of the array used for the delay line is
+DELAY_BUFFER_PAD_FACTOR * LENGTH. when the array fills, all the
+values are shifted over so only LENGTH remain. larger values mean
+that the shifting happens less frequently, but will take longer.
+I have not tweaked this value to find the perfect balance.
+*/
 #define DELAY_BUFFER_PAD_FACTOR (2)
 
 typedef struct _Delay {
@@ -47,6 +56,7 @@ ckv_delay_tick(lua_State *L)
 		delay->ptr = delay->delay_length;
 	}
 	
+	/* add current sample to the delay line */
 	delay->buffer[delay->ptr++] = sample;
 	
 	lua_pushnumber(L, last_value);
@@ -89,6 +99,7 @@ ckv_delay_new(lua_State *L)
 		return 0;
 	}
 	
+	/* if they provided a delay length use that; otherwise default to about 100ms */
 	if(lua_isnumber(L, 1)) {
 		delay_amount = lua_tonumber(L, 1);
 		if(delay_amount < 0)
@@ -110,20 +121,19 @@ ckv_delay_new(lua_State *L)
 		return 0;
 	}
 	
-	/* self */
-	lua_createtable(L, 0 /* array */, 2 /* non-array */);
+	lua_createtable(L, 0 /* array */, 2 /* non-array */);             /* stack: delay */
+	lua_pushlightuserdata(L, delay);                                  /* stack: delay, delay struct */
+	lua_createtable(L, 0 /* array */, 1 /* non-array */);             /* stack: delay, delay struct, metatable */
+	lua_pushcfunction(L, ckv_delay_release);                          /* stack: delay, delay struct, metatable, destructor */
+	lua_setfield(L, -2, "__gc"); /* metatable[__gc] = destructor */   /* stack: delay, delay struct, metatable */
+	lua_setmetatable(L, -2);                                          /* stack: delay, delay struct */
+	lua_setfield(L, -2, "obj"); /* delay[obj] = delay struct */       /* stack: delay */
 	
-	/* set GC routine, then */
-	/* self.obj = delay* */
-	lua_pushlightuserdata(L, delay);
-	lua_createtable(L, 0 /* array */, 1 /* non-array */); /* new metatable */
-	lua_pushcfunction(L, ckv_delay_release);
-	lua_setfield(L, -2, "__gc");
-	lua_setmetatable(L, -2);
-	lua_setfield(L, -2, "obj");
+	luaL_register(L, NULL, ckvugen_delay); /* add delay methods (tick, etc) */
 	
-	/* add delay methods */
-	luaL_register(L, NULL, ckvugen_delay);
+	/* initialize delay.last to 0.0 */
+	lua_pushnumber(L, 0.0);
+	lua_setfield(L, -2, "last");
 	
 	return 1; /* return self */
 }
