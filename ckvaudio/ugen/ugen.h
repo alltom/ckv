@@ -7,6 +7,9 @@
 #include "lauxlib.h"
 
 /* standard unit generators */
+/* these functions add their respective
+   unit generator constructors to the
+   global namespace */
 int open_ugen_delay(lua_State *L);
 int open_ugen_follower(lua_State *L);
 int open_ugen_gain(lua_State *L);

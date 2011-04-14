@@ -7,6 +7,8 @@
 typedef struct _CKVMIDI *CKVMIDI;
 
 CKVMIDI ckvmidi_open(CKVM vm);
+
+/* call these to dispatch MIDI messages to the ckv objects who are listening for them */
 void ckvmidi_dispatch_note_on(CKVMIDI midi, int channel, int note, float velocity);
 void ckvmidi_dispatch_key_pressure(CKVMIDI midi, int channel, int note, float velocity);
 void ckvmidi_dispatch_note_off(CKVMIDI midi, int channel, int note);

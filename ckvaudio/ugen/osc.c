@@ -3,6 +3,8 @@
 
 /* LIBRARY REGISTRATION */
 
+/* all the oscillators */
+
 int
 open_ugen_pulseosc(lua_State *L)
 {

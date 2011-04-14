@@ -86,6 +86,10 @@ ckv_connect(lua_State *L) {
 	lua_getfield(L, -1, "connect");
 	connect = lua_gettop(L);
 	
+	/*
+	if they provided a function (constructor) instead of a table (ex: connect(Gain, speaker)),
+	call the function and connect the return value instead
+	*/
 	if(lua_type(L, 1) == LUA_TFUNCTION) {
 		lua_pushvalue(L, 1);
 		lua_call(L, 0, 1);
@@ -252,7 +256,7 @@ open_ckvugen(lua_State *L)
 	lua_CFunction *fn;
 	
 	/* UGen */
-	lua_createtable(L, 0, 3 /* estimated number of functions */);
+	lua_createtable(L, 0, 3 /* 3 functions in "UGen" */);
 	lua_pushcfunction(L, ckv_ugen_sum_inputs); lua_setfield(L, -2, "sum_inputs");
 	lua_setglobal(L, "UGen");
 	
@@ -282,7 +286,7 @@ open_ckvugen(lua_State *L)
 	lua_setglobal(L, "dac"); /* pops one */
 	lua_setglobal(L, "speaker"); /* pops other */
 	
-	/* adc */
+	/* adc (microphone/audio input) */
 	lua_getglobal(L, "Step");
 	lua_call(L, 0, 1);
 	lua_pushvalue(L, -1); /* dup adc */
