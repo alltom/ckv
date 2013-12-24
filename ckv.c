@@ -1,16 +1,17 @@
 
-#include "ckv.h"
-#include "ckvm.h"
-#include "ckvaudio/audio.h"
-#include "ckvmidi/midi.h"
-#include "pq.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <math.h>
 #include <pthread.h>
 #include <string.h>
+
+#include "ckv.h"
+#include "ckvm.h"
+#include "ckvaudio/audio.h"
+#include "ckvmidi/midi.h"
+#include "pq.h"
+
 
 typedef struct VM {
 	CKVM ckvm;
@@ -30,7 +31,7 @@ usage(void)
 	printf("usage: ckv [-has] [file ...]\n");
 	printf("  -h     print this usage information\n");
 	printf("  -a     load all Lua libraries (enough to shoot yourself in the foot), including file IO\n");
-	printf("  -s     silent mode (no audio processing, non-real-time)\n");
+	printf("  -s     silent mode (no audio processing, no MIDI, non-real-time)\n");
 	printf("  -m N   listen on MIDI port N\n");
 	printf("  -c V   hard clip audio output at +/-V\n");
 }
@@ -49,6 +50,7 @@ error_callback(CKVM vm, const char *message)
 	print_error(message);
 }
 
+/* read all of the given stream into memory */
 static
 char *
 read_all(FILE *stream)
@@ -185,14 +187,17 @@ open_base_libs(VM *vm, int all_libs)
 	);
 	
 	/* import math.random */
+	/* create aliases "random" and "rand" for "math.random" */
 	lua_getglobal(L, "math");
 	lua_getfield(L, -1, "random");
-	lua_setglobal(L, "random"); /* alias as random */
+	lua_setglobal(L, "random");
 	lua_getfield(L, -1, "random");
-	lua_setglobal(L, "rand"); /* alias as rand */
+	lua_setglobal(L, "rand");
 	lua_pop(L, 1); /* pop math */
 	
 	/* handy random functions */
+	/* TODO: can we implement these as globals which don't exist until you reference them,
+	         so users can type their names without parentheses? */
 	(void) luaL_dostring(L,
 	"function maybe() return random() < 0.5 end "
 	"function probably() return random() < 0.7 end "
@@ -215,7 +220,7 @@ main(int argc, char *argv[])
 	int num_scripts, scripts_added;
 	int silent_mode = 0; /* whether to execute without using the sound card */
 	double hard_clip = 0;
-	int all_libs = 0; /* whether to load even lua libraries that could screw things up */
+	int all_libs = 0; /* whether to load all lua standard libraries */
 	int sample_rate = 44100;
 	int midi_port = -1;
 	
@@ -272,6 +277,7 @@ main(int argc, char *argv[])
 	scripts_added = 0;
 	for(i = optind; i < argc; i++) {
 		if(strcmp(argv[i], "-") == 0) {
+			/* read script from stdin */
 			char *script = read_all(stdin);
 			if(script == NULL) {
 				print_error("could not read script from stdin");
@@ -283,7 +289,7 @@ main(int argc, char *argv[])
 			
 			free(script);
 		} else {
-			if(ckvm_add_thread(vm.ckvm, argv[i]))
+			if(ckvm_add_thread_from_file(vm.ckvm, argv[i]))
 				scripts_added++;
 		}
 	}
@@ -292,9 +298,17 @@ main(int argc, char *argv[])
 	
 	if(silent_mode) {
 		
-		int second;
+		/* request audio buffers from ckv to advance time */
+		
+		int i;
 		double fakeMicBuffer[512], fakeSpeakerBuffer[512];
-		for(second = 0; ; second++) {
+		
+		/* zero the fake mic input buffer (TODO: use memset) */
+		for(i = 0; i < 512; i++) {
+			fakeMicBuffer[i] = 0;
+		}
+		
+		while(1) {
 			ckva_fill_buffer(vm.audio, fakeSpeakerBuffer, fakeMicBuffer, 512);
 			
 			if(!ckvm_running(vm.ckvm))
@@ -305,6 +319,9 @@ main(int argc, char *argv[])
 		ckvm_destroy(vm.ckvm);
 		
 	} else {
+		
+		/* the audio callback advances time;
+		   start it here, then wait for it to finish */
 		
 		if(midi_port != -1 && !start_midi(midi_port))
 			print_error("could not start MIDI"); /* not fatal */
@@ -319,11 +336,13 @@ main(int argc, char *argv[])
 			return EXIT_FAILURE;
 		}
 		
-		/* wait for audio to finish */
+		/* wait for ckv to finish */
 		pthread_cond_wait(&vm.audio_done, &vm.audio_done_mutex);
 		pthread_mutex_unlock(&vm.audio_done_mutex);
 		
+		/* stop the rtaudio callback */
 		stop_audio();
+		
 		ckva_destroy(vm.audio);
 		ckvm_destroy(vm.ckvm);
 		
@@ -340,6 +359,10 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 	VM *vm = (VM *)userData;
 	MidiMsg midiMsg;
 	
+	if(!ckvm_running(vm->ckvm)) {
+		return;
+	}
+	
 	while(get_midi_message(&midiMsg)) {
 		if(!midiMsg.control && !midiMsg.pitch_bend) {
 			if(midiMsg.velocity > 0)
@@ -349,8 +372,10 @@ render_audio(double *outputBuffer, double *inputBuffer, unsigned int nFrames,
 		}
 	}
 	
+	/* fill audio buffer by running ckv for nFrames samples */
 	ckva_fill_buffer(vm->audio, outputBuffer, inputBuffer, nFrames);
 	
+	/* signal main thread to exit if ckv is finished */
 	if(!ckvm_running(vm->ckvm)) {
 		pthread_mutex_lock(&vm->audio_done_mutex);
 		pthread_cond_signal(&vm->audio_done);

@@ -42,6 +42,12 @@ ckva_open(CKVM vm, int sample_rate, int channels, double hard_clip, int print_ti
 	return audio;
 }
 
+void
+ckva_destroy(CKVAudio audio)
+{
+	free(audio);
+}
+
 int
 ckva_sample_rate(CKVAudio audio)
 {
@@ -141,12 +147,6 @@ ckva_fill_buffer(CKVAudio audio, double *outputBuffer, double *inputBuffer, int 
 	}
 
 	lua_settop(L, oldtop);
-}
-
-void
-ckva_destroy(CKVAudio audio)
-{
-	free(audio);
 }
 
 static
