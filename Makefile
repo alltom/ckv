@@ -24,7 +24,7 @@ CC = gcc
 CFLAGS = -g -pedantic -Wall -O3 $(EXTRA_CFLAGS)
 LDFLAGS = -llua
 LDFLAGS += $(AUDIO_LDFLAGS) $(MIDI_LDFLAGS) # audio
-LDFLAGS += -lavformat -lavcodec -lavutil -lswscale -lz $(FFMPEG_LDFLAGS) # sndin
+LDFLAGS += -lavformat -lavcodec -lavutil -lswresample -lz $(FFMPEG_LDFLAGS) # sndin
 OBJECTS = ckv.o ckvm.o luabaselite.o pq.o
 OBJECTS += ckvaudio/audio.o rtaudio_wrapper.o rtaudio/RtAudio.o \
            ckvaudio/ugen/delay.o ckvaudio/ugen/follower.o ckvaudio/ugen/gain.o \

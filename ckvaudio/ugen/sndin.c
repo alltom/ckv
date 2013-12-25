@@ -4,7 +4,8 @@
 #include <stdbool.h>
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
+#include <libavutil/opt.h>
 
 #include "../../ckvm.h"
 #include "ugen.h"
@@ -12,58 +13,91 @@
 typedef struct _SndIn {
 	AVFormatContext *pFormatCtx;
 	AVCodecContext *pCodecCtx;
-	int audioStream; /* which stream is audio */
-	int16_t audio_buf[(AVCODEC_MAX_AUDIO_FRAME_SIZE + FF_INPUT_BUFFER_PADDING_SIZE) / sizeof(int16_t)];
-	int curr_buf_count; /* number of samples currently in buffer */
-	float audio_buf_ptr; /* next sample to read from buffer */
+	AVPacket decodingPacket;
+	AVFrame *frame;
+	SwrContext *resampler;
+	int audioStreamIndex; /* which stream is audio */
+
+	float *buffer;
+	int samplesLeft;
+	float nextSampleIndex; /* can advance at fractional rates */
+
 	int eof, closed;
 } SndIn;
+
+static int sndin_handle_packet(SndIn *sndin); /* returns number of samples in frame */
+static void sndin_handle_frame(SndIn *sndin);
 
 /* returns 0 on failure */
 static
 int
-sndin_open(SndIn *sndin, const char *filename)
+sndin_open(SndIn *sndin, const char *filename, int out_sample_rate)
 {
-	unsigned int i;
 	AVCodec *pCodec;
+
+	sndin->pFormatCtx = NULL;
+	sndin->pCodecCtx = NULL;
+	sndin->frame = NULL;
+	sndin->decodingPacket.size = 0;
+	sndin->buffer = NULL;
+
+	sndin->samplesLeft = sndin->nextSampleIndex = 0;
+	sndin->eof = 0;
+	sndin->closed = 0;
 
 	/* Register all formats and codecs */
 	av_register_all();
 
-	if(av_open_input_file(&sndin->pFormatCtx, filename, NULL, 0, NULL) != 0)
+	/* open audio file */
+	if(avformat_open_input(&sndin->pFormatCtx, filename, NULL, NULL) != 0)
 		return 0;
 
-	if(av_find_stream_info(sndin->pFormatCtx) < 0)
+	/* get stream information */
+	if (avformat_find_stream_info(sndin->pFormatCtx, NULL) < 0) {
+		avformat_close_input(&sndin->pFormatCtx);
 		return 0; /* Couldn't find stream information */
+	}
 
-	/* Dump information about file onto standard error */
-	/* dump_format(pFormatCtx, 0, filename, false); */
-
-	/* Find the first audio stream */
-	sndin->audioStream = -1;
-	for(i = 0; i < sndin->pFormatCtx->nb_streams; i++)
-		if(sndin->pFormatCtx->streams[i]->codec->codec_type == CODEC_TYPE_AUDIO) {
-			sndin->audioStream = i;
-			break;
-		}
-	if(sndin->audioStream == -1)
+	/* identify best audio stream */
+	sndin->audioStreamIndex = av_find_best_stream(sndin->pFormatCtx, AVMEDIA_TYPE_AUDIO, -1, -1, &pCodec, 0);
+	if (sndin->audioStreamIndex < 0) {
+		avformat_close_input(&sndin->pFormatCtx);
 		return 0;
+	}
 
-	/* Get a pointer to the codec context for the audio stream */
-	sndin->pCodecCtx = sndin->pFormatCtx->streams[sndin->audioStream]->codec;
-
-	/* Find the decoder for the audio stream */
-	pCodec = avcodec_find_decoder(sndin->pCodecCtx->codec_id);
-	if(pCodec == NULL)
+	/* allocate audio buffer */
+	sndin->frame = avcodec_alloc_frame();
+	if (!sndin->frame) {
+		avformat_close_input(&sndin->pFormatCtx);
 		return 0;
+	}
 
-	if(avcodec_open(sndin->pCodecCtx, pCodec) < 0)
+	/* Get the codec context for the audio stream */
+	AVStream *audioStream = sndin->pFormatCtx->streams[sndin->audioStreamIndex];
+	sndin->pCodecCtx = audioStream->codec;
+	sndin->pCodecCtx->codec = pCodec;
+
+	if (avcodec_open2(sndin->pCodecCtx, sndin->pCodecCtx->codec, NULL) != 0) {
+		av_free(sndin->frame);
+		avformat_close_input(&sndin->pFormatCtx);
 		return 0;
-	
-	sndin->curr_buf_count = sndin->audio_buf_ptr = 0;
-	sndin->eof = 0;
-	sndin->closed = 0;
-	
+	}
+
+	/* initialize a converter from the input sample format to float samples */
+	sndin->resampler = swr_alloc();
+	av_opt_set_int(sndin->resampler, "in_channel_layout", sndin->pCodecCtx->channel_layout, 0);
+	av_opt_set_int(sndin->resampler, "out_channel_layout", AV_CH_LAYOUT_MONO, 0);
+	av_opt_set_int(sndin->resampler, "in_sample_rate", sndin->pCodecCtx->sample_rate, 0);
+	av_opt_set_int(sndin->resampler, "out_sample_rate", out_sample_rate, 0);
+	av_opt_set_sample_fmt(sndin->resampler, "in_sample_fmt", sndin->pCodecCtx->sample_fmt, 0);
+	av_opt_set_sample_fmt(sndin->resampler, "out_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
+	if(swr_init(sndin->resampler) != 0) {
+		avcodec_close(sndin->pCodecCtx);
+		av_free(sndin->frame);
+		avformat_close_input(&sndin->pFormatCtx);
+		return 0;
+	}
+
 	return 1;
 }
 
@@ -71,59 +105,105 @@ static
 void
 sndin_get_samples(SndIn *sndin)
 {
-	AVPacket packet;
-	int i, chans, frames;
+	AVPacket readingPacket;
 	
 	if(sndin->closed || sndin->eof)
 		return;
-	
-	while(av_read_frame(sndin->pFormatCtx, &packet) >= 0) {
+
+	av_init_packet(&readingPacket);
+
+	/* check if there are samples left over from the last decodingPacket */
+	if (sndin_handle_packet(sndin) > 0) {
+		sndin_handle_frame(sndin);
+		return;
+	}
+
+	/* read new frame then read from decodingPacket again */
+	while(av_read_frame(sndin->pFormatCtx, &readingPacket) == 0) {
 		/* is this a packet from the audio stream? */
-		if(packet.stream_index == sndin->audioStream) {
-			int buf_size = sizeof(sndin->audio_buf) * sizeof(sndin->audio_buf[0]);
-			
-			/* decode audio buf */
-			int len = avcodec_decode_audio3(sndin->pCodecCtx,
-			                                sndin->audio_buf,
-			                                &buf_size,
-			                                &packet);
-			
-			/* len is the number of encoded bytes used, or negative if error */
-			if(len < 0) {
-				/* error, skip packet */
-				continue;
+		if(readingPacket.stream_index == sndin->audioStreamIndex) {
+			sndin->decodingPacket = readingPacket;
+
+			if (sndin_handle_packet(sndin) > 0) {
+				sndin_handle_frame(sndin);
+				av_free_packet(&readingPacket);
+				return;
 			}
-			
-			/* got buf_size bytes! */
-			/* format is int16_t (signed short) */
-			sndin->curr_buf_count = buf_size/sizeof(sndin->audio_buf[0]);
-			
-			if(sndin->pCodecCtx->channels > 1) {
-				/* take the first channel */
-				chans = sndin->pCodecCtx->channels;
-				frames = sndin->curr_buf_count / chans;
-				for(i = 0; i < frames; i++)
-					sndin->audio_buf[i] = sndin->audio_buf[i * chans];
-				
-				sndin->curr_buf_count = frames;
-			}
-			
-			sndin->audio_buf_ptr -= sndin->curr_buf_count;
+		}
+
+		av_free_packet(&readingPacket);
+	}
+
+	/*
+	Some codecs will cause frames to be buffered up in the decoding process.
+	If the CODEC_CAP_DELAY flag is set, there can be buffered up frames that
+	need to be flushed, so we'll do that.
+	*/
+	if (sndin->pCodecCtx->codec->capabilities & CODEC_CAP_DELAY) {
+		av_init_packet(&readingPacket);
+
+		/* Decode all the remaining frames in the buffer, until the end is reached */
+		int gotFrame = 0;
+		if(avcodec_decode_audio4(sndin->pCodecCtx, sndin->frame, &gotFrame, &readingPacket) >= 0 && gotFrame) {
+			sndin_handle_frame(sndin);
 			return;
 		}
 	}
-	
+
 	/* we ran out of packets */
-	sndin->curr_buf_count = sndin->audio_buf_ptr = 0;
+	sndin->samplesLeft = sndin->nextSampleIndex = 0;
 	sndin->eof = 1;
+}
+
+static
+int
+sndin_handle_packet(SndIn *sndin)
+{
+	/* Audio packets can have multiple audio frames in a single packet */
+	if(sndin->decodingPacket.size > 0) {
+		/*
+		Try to decode the packet into a frame.
+		Some frames rely on multiple packets, so we have to make sure
+		the frame is finished before we can use it.
+		*/
+		int gotFrame = 0;
+		int len = avcodec_decode_audio4(sndin->pCodecCtx, sndin->frame, &gotFrame, &sndin->decodingPacket);
+
+		if(len >= 0 && gotFrame) {
+			sndin->decodingPacket.size -= len;
+			sndin->decodingPacket.data += len;
+			return len;
+		} else {
+			sndin->decodingPacket.size = 0;
+			sndin->decodingPacket.data = NULL;
+		}
+	}
+
+	return 0;
+}
+
+static
+void
+sndin_handle_frame(SndIn *sndin)
+{
+	if(sndin->buffer) {
+		av_freep(&sndin->buffer);
+	}
+
+	int out_samples = av_rescale_rnd(swr_get_delay(sndin->resampler, sndin->pCodecCtx->sample_rate) + sndin->frame->nb_samples, sndin->pCodecCtx->sample_rate, sndin->pCodecCtx->sample_rate, AV_ROUND_UP);
+	av_samples_alloc((uint8_t **)&sndin->buffer, NULL, 1 /* channels */, out_samples, AV_SAMPLE_FMT_FLT, 0);
+	sndin->nextSampleIndex -= sndin->samplesLeft;
+	sndin->samplesLeft = swr_convert(sndin->resampler, (uint8_t **)&sndin->buffer, out_samples, (const uint8_t **)sndin->frame->extended_data, sndin->frame->nb_samples);
 }
 
 static
 void
 sndin_close(SndIn *sndin)
 {
+	av_free(sndin->frame);
 	avcodec_close(sndin->pCodecCtx);
-	av_close_input_file(sndin->pFormatCtx);
+	avformat_close_input(&sndin->pFormatCtx);
+
 	sndin->eof = 1;
 	sndin->closed = 1;
 }
@@ -146,7 +226,7 @@ ckv_sndin_tick(lua_State *L)
 	if(sndin->closed || sndin->eof)
 		return 0;
 	
-	while(!sndin->eof && sndin->audio_buf_ptr >= sndin->curr_buf_count)
+	while(!sndin->eof && sndin->nextSampleIndex >= sndin->samplesLeft)
 		sndin_get_samples(sndin);
 	if(sndin->eof) {
 		/* ran out of data */
@@ -161,8 +241,8 @@ ckv_sndin_tick(lua_State *L)
 			return 0;
 		}
 		
-		last_value = sndin->audio_buf[(int) sndin->audio_buf_ptr] / 32767.0;
-		sndin->audio_buf_ptr += rate;
+		last_value = sndin->buffer[(int) sndin->nextSampleIndex];
+		sndin->nextSampleIndex += rate;
 	}
 	
 	lua_pushnumber(L, last_value);
@@ -219,6 +299,11 @@ ckv_sndin_new(lua_State *L)
 	
 	SndIn *sndin;
 	const char *filename;
+
+	/* get the current sample rate */
+	ckvm_pushstdglobal(L, "sample_rate");
+	lua_Number sample_rate = lua_tonumber(L, -1);
+	lua_pop(L, 1);
 	
 	sndin = (SndIn *)malloc(sizeof(struct _SndIn));
 	if(sndin == NULL) {
@@ -227,7 +312,7 @@ ckv_sndin_new(lua_State *L)
 	}
 	
 	filename = lua_tostring(L, 1);
-	if(!sndin_open(sndin, filename)) {
+	if(!sndin_open(sndin, filename, sample_rate)) {
 		fprintf(stderr, "[ckv] could not open file \"%s\"\n", filename);
 		return 0;
 	}
@@ -249,9 +334,6 @@ ckv_sndin_new(lua_State *L)
 	lua_setfield(L, -2, "filename");
 	
 	/* self.duration = ... */
-	ckvm_pushstdglobal(L, "sample_rate");
-	lua_Number sample_rate = lua_tonumber(L, -1);
-	lua_pop(L, 1);
 	lua_pushnumber(L, sndin->pFormatCtx->duration / 1000000.0 * sample_rate);
 	lua_setfield(L, -2, "duration");
 	
